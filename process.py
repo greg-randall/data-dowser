@@ -64,6 +64,40 @@ def get_failed_files() -> set[str]:
     return failed
 
 
+def is_valid_binary_doc(file_path: Path) -> bool:
+    """
+    Check if file is a valid .doc file and not a disguised HTML error page.
+    Returns False if file is small (<15KB) and contains HTML tags, 
+    or if it lacks the OLE2 signature.
+    """
+    try:
+        # Check size first - very small files are suspicious
+        size = file_path.stat().st_size
+        if size < 256: 
+            return False
+            
+        with open(file_path, 'rb') as f:
+            header = f.read(512)
+            
+        # Check for OLE2 magic bytes (D0 CF 11 E0) - Standard for .doc
+        if header.startswith(b'\xd0\xcf\x11\xe0'):
+            return True
+            
+        # If no magic bytes, check if it's explicitly HTML
+        header_lower = header.lower()
+        if b'<!doctype html' in header_lower or b'<html' in header_lower:
+            return False
+        
+        # If > 15KB and not obviously HTML, give it the benefit of the doubt
+        # (Some valid docs might not have standard headers or be RTF)
+        if size > 15 * 1024:
+            return True
+            
+        return False
+    except Exception:
+        return False
+
+
 # =============================================================================
 # Word Conversion
 # =============================================================================
@@ -73,14 +107,26 @@ def convert_worker(args: tuple[list[Path], int, bool]) -> list[Path]:
     Worker that converts .doc files to HTML using Word COM.
     Returns list of successfully created HTML files.
     """
-    file_list, worker_id, force_regenerate = args
+    raw_file_list, worker_id, force_regenerate = args
 
-    if not file_list:
+    if not raw_file_list:
         return []
+
+    # Pre-filter files to remove invalid/HTML docs
+    file_list = []
+    skipped_html = []
+    
+    for f in raw_file_list:
+        if is_valid_binary_doc(f):
+            file_list.append(f)
+        else:
+            # Log specific failure for visibility
+            log_failure(f, "Skipped (Invalid/HTML)")
+            # If we skip it here, we don't return it as 'created', so it won't be JSON extracted.
+            # But we should ensure we don't retry it forever. The log_failure handles the logging.
 
     # Build file paths for PowerShell
     conversions = []
-    skipped_html = []
     
     for doc_file in file_list:
         html_path = doc_file.with_suffix('.html')
