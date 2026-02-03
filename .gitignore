@@ -1,0 +1,17 @@
+downloads/
+cache_html/
+old/
+__pycache__/
+test_docs/
+
+*copy*
+
+*.ps1
+*.txt
+*.log
+*.json
+*.7z
+*.gz
+*.md
+!README.md
+*.tmp
