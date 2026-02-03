@@ -1,0 +1,100 @@
+# Contaminant Categories for Water Quality Dashboard
+# Keywords are matched against contaminant names (case-insensitive, partial match)
+
+oil_gas:
+  - benzene
+  - toluene
+  - xylene
+  - xylenes
+  - ethylbenzene
+  - btex
+  - mtbe
+  - styrene
+
+radioactive:
+  - radium 226
+  - radium 228
+  - radium-226
+  - radium-228
+  - combined radium
+  - uranium
+  - gross alpha
+  - gross beta
+  - alpha emitters
+  - beta particle
+  - beta/photon
+  - photon emitters
+  - radon
+
+agricultural:
+  # Nitrates
+  - nitrate
+  - nitrite
+  # Herbicides
+  - atrazine
+  - simazine
+  - alachlor
+  - 2,4-d
+  - glyphosate
+  - dalapon
+  - picloram
+  - diquat
+  # Pesticides (organochlorines and others)
+  - chlordane
+  - endrin
+  - heptachlor
+  - lindane
+  - pentachlorophenol
+  - hexachlorocyclopentadiene
+  - ethylene dibromide
+
+heavy_metals:
+  - arsenic
+  - lead
+  - chromium
+  - mercury
+  - cadmium
+  - antimony
+  - beryllium
+  - thallium
+  - copper
+  - barium
+  - selenium
+
+disinfection_byproducts:
+  - trihalomethanes
+  - tthm
+  - haloacetic
+  - haa5
+  - haa
+  - chlorite
+  - bromate
+  - chlorine
+  - chloramine
+
+industrial_solvents:
+  # Chlorinated solvents
+  - dichloroethylene
+  - dichloroethane
+  - dichloropropane
+  - dichloromethane
+  - trichloroethylene
+  - tetrachloroethylene
+  - carbon tetrachloride
+  - vinyl chloride
+  - chlorobenzene
+  # Other VOCs
+  - dicholoroethylene  # Handle typo in data: "trans-1,2-Dicholoroethylene"
+
+minerals:
+  - fluoride
+  - asbestos
+  - cyanide
+
+plasticizers:
+  - di (2-ethylhexyl)
+  - phthalate
+  - adipate
+
+pahs:  # Polycyclic aromatic hydrocarbons
+  - benzo  # Matches Benzo(a)pyrene after normalization strips parentheses
