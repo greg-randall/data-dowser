@@ -2,7 +2,7 @@
 
 This set of scripts downloads, processes, and maps public water quality data from the Texas Commission on Environmental Quality (TCEQ).
 
-![Dashboard Preview](readme/dashboard-sample.png)
+![Dashboard Preview](readme/dashboard-sample.jpg)
 
 ## Overview
 
