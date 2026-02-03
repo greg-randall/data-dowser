@@ -108,7 +108,12 @@ $ErrorActionPreference = 'Stop'
 $conversions = {files_array}
 $word = $null
 try {{
+    $before = @(Get-Process WINWORD -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
     $word = New-Object -ComObject Word.Application
+    $after = @(Get-Process WINWORD -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+    $wordPid = $after | Where-Object {{ $before -notcontains $_ }} | Select-Object -First 1
+    if ($wordPid) {{ Write-Output "PID::$wordPid" }}
+    
     $word.Visible = $false
     $word.DisplayAlerts = 0
 
@@ -150,8 +155,9 @@ try {{
     )
 
     last_activity = time.time()
-    TIMEOUT = 30  # seconds
+    TIMEOUT = 45  # Increased slightly
     current_processing_file = None
+    word_pid = None
 
     # Map Windows paths back to original Path objects for logging
     win_path_map = {win_doc: orig_path for win_doc, _, orig_path in conversions}
@@ -169,12 +175,17 @@ try {{
             if not line:
                 break
             
+            # Capture Word PID
+            if "PID::" in line:
+                try:
+                    word_pid = line.split("PID::", 1)[1].strip()
+                except Exception:
+                    pass
+
             # Reset timer on significant progress and track file
             if "START::" in line:
                 last_activity = time.time()
                 win_path = line.split("START::", 1)[1].strip()
-                # Normalize path if needed, but dictionary lookup should work if exact match
-                # PowerShell might return different casing or slashes, so be careful
                 current_processing_file = win_path 
             elif "DONE::" in line:
                 last_activity = time.time()
@@ -183,14 +194,19 @@ try {{
         # Check watchdog
         if time.time() - last_activity > TIMEOUT:
             proc.kill()
-            print(f"\nWorker {worker_id}: Timeout processing {current_processing_file}", file=sys.stderr)
+            print(f"\nWorker {worker_id}: Timeout processing {current_processing_file or 'startup'}", file=sys.stderr)
+            
+            # Kill the specific Word process if we have its PID
+            if word_pid:
+                try:
+                    subprocess.run(["taskkill.exe", "/F", "/PID", word_pid], capture_output=True)
+                except Exception:
+                    pass
             
             # Try to find the Path object for the stuck file
             failed_path = None
             if current_processing_file:
-                # Try exact match first
                 failed_path = win_path_map.get(current_processing_file)
-                # If not found, try loose matching (PowerShell might normalize paths)
                 if not failed_path:
                     for wp, op in win_path_map.items():
                         if str(op.name) in current_processing_file:
@@ -198,14 +214,17 @@ try {{
                             break
             
             if failed_path:
-                log_failure(failed_path, "Timeout (>30s)")
-                print(f"Logged failure for: {failed_path.name}", file=sys.stderr)
-            
+                log_failure(failed_path, "Timeout (>45s)")
             break
 
     # Ensure process is dead
     if proc.poll() is None:
         proc.kill()
+        if word_pid:
+            try:
+                subprocess.run(["taskkill.exe", "/F", "/PID", word_pid], capture_output=True)
+            except Exception:
+                pass
 
     # Return list of HTML files (both newly created and skipped ones)
     newly_created = [html_path for _, _, html_path in conversions if html_path.exists()]
@@ -678,26 +697,14 @@ def main():
     total_converted = 0
     total_extracted = 0
 
-    # Process in batches
-    batch_size = args.batch_size * args.threads
+    # Split into chunks for workers
+    chunk_size = args.batch_size
+    chunks = [pending_docs[i:i + chunk_size] for i in range(0, len(pending_docs), chunk_size)]
+    worker_args = [(chunk, i, args.force_html_regenerate) for i, chunk in enumerate(chunks)]
 
-    with tqdm(total=len(pending_docs), desc="Processing", unit="file") as pbar:
-        for batch_start in range(0, len(pending_docs), batch_size):
-            batch_docs = pending_docs[batch_start:batch_start + batch_size]
-
-            # Split batch across workers
-            chunks = [[] for _ in range(args.threads)]
-            for i, f in enumerate(batch_docs):
-                chunks[i % args.threads].append(f)
-
-            worker_args = [(chunk, i, args.force_html_regenerate) for i, chunk in enumerate(chunks)]
-
-            # Convert .doc → .html
-            with multiprocessing.Pool(args.threads) as pool:
-                results = pool.map(convert_worker, worker_args)
-
-            # Flatten list of HTML files created
-            html_created = [html for sublist in results for html in sublist]
+    with multiprocessing.Pool(args.threads) as pool:
+        # Use imap_unordered for better performance as we can process results as they come in
+        for html_created in tqdm(pool.imap_unordered(convert_worker, worker_args), total=len(chunks), desc="Processing Batches"):
             total_converted += len(html_created)
 
             # Extract .html → .json
@@ -711,9 +718,6 @@ def main():
                         files_dir = html_path.parent / (html_path.stem + '_files')
                         if files_dir.exists():
                             shutil.rmtree(files_dir)
-
-            # Update progress bar
-            pbar.update(len(batch_docs))
 
     # Final summary
     elapsed = time.time() - start_time
