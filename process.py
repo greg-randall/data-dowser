@@ -155,12 +155,17 @@ try {{
     )
 
     last_activity = time.time()
-    TIMEOUT = 45  # Increased slightly
+    TIMEOUT = 45  # seconds
     current_processing_file = None
     word_pid = None
+    
+    # Track which file index we are currently on
+    current_index = -1
 
     # Map Windows paths back to original Path objects for logging
     win_path_map = {win_doc: orig_path for win_doc, _, orig_path in conversions}
+    # Map Windows paths to index
+    win_path_to_index = {win_doc: i for i, (win_doc, _, _) in enumerate(conversions)}
 
     while True:
         # Check if process finished
@@ -186,7 +191,10 @@ try {{
             if "START::" in line:
                 last_activity = time.time()
                 win_path = line.split("START::", 1)[1].strip()
-                current_processing_file = win_path 
+                current_processing_file = win_path
+                if win_path in win_path_to_index:
+                    current_index = win_path_to_index[win_path]
+
             elif "DONE::" in line:
                 last_activity = time.time()
                 current_processing_file = None
@@ -203,19 +211,43 @@ try {{
                 except Exception:
                     pass
             
-            # Try to find the Path object for the stuck file
+            # Identify the failed file
             failed_path = None
+            failed_idx = -1
+            
             if current_processing_file:
                 failed_path = win_path_map.get(current_processing_file)
+                failed_idx = win_path_to_index.get(current_processing_file, -1)
+                
+                # Fallback search if exact match fails
                 if not failed_path:
                     for wp, op in win_path_map.items():
                         if str(op.name) in current_processing_file:
                             failed_path = op
+                            failed_idx = win_path_to_index.get(wp, -1)
                             break
             
             if failed_path:
                 log_failure(failed_path, "Timeout (>45s)")
-            break
+            
+            # Ensure process is dead
+            if proc.poll() is None:
+                proc.kill()
+            
+            # RESCUE STRATEGY:
+            # If we know where we failed (failed_idx), we can try to recover the *rest* of the batch.
+            # The failed file is at failed_idx. We want to process failed_idx + 1 onwards.
+            
+            current_results = [html_path for _, _, html_path in conversions if html_path.exists()]
+            
+            if failed_idx != -1 and failed_idx + 1 < len(file_list):
+                remaining_files = file_list[failed_idx + 1:]
+                if remaining_files:
+                    # print(f"Worker {worker_id}: Rescuing {len(remaining_files)} files after timeout...", file=sys.stderr)
+                    rescued_results = convert_worker((remaining_files, worker_id, force_regenerate))
+                    return skipped_html + current_results + rescued_results
+
+            return skipped_html + current_results
 
     # Ensure process is dead
     if proc.poll() is None:
