@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texas Water Quality Dashboard</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: #16213e;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sidebar-header {
+            border-bottom: 2px solid #00d4ff;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sidebar h1 {
+            font-size: 1.4em;
+            color: #00d4ff;
+            margin-bottom: 4px;
+        }
+
+        .showing-count {
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        .showing-count span {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+
+        .sidebar h2 {
+            font-size: 1em;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        /* Featured Categories */
+        .featured-filters {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .featured-btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .featured-btn.oil-gas {
+            background: #2d2d44;
+            color: #ff6b6b;
+            border: 2px solid #ff6b6b;
+        }
+
+        .featured-btn.oil-gas.active {
+            background: #ff6b6b;
+            color: #fff;
+        }
+
+        .featured-btn.radioactive {
+            background: #2d2d44;
+            color: #ffd93d;
+            border: 2px solid #ffd93d;
+        }
+
+        .featured-btn.radioactive.active {
+            background: #ffd93d;
+            color: #000;
+        }
+
+        .featured-btn.arsenic {
+            background: #2d2d44;
+            color: #6bcb77;
+            border: 2px solid #6bcb77;
+        }
+
+        .featured-btn.arsenic.active {
+            background: #6bcb77;
+            color: #000;
+        }
+
+        .featured-btn.all {
+            background: #00d4ff;
+            color: #000;
+            border: 2px solid #00d4ff;
+        }
+
+        .featured-btn.all:not(.active) {
+            background: #2d2d44;
+            color: #00d4ff;
+        }
+
+        /* Filter Section */
+        .filter-section {
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .filter-section h3 {
+            font-size: 0.9em;
+            color: #00d4ff;
+            margin-bottom: 12px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #00d4ff;
+        }
+
+        /* Sliders */
+        .slider-group {
+            margin-bottom: 15px;
+        }
+
+        .slider-group label {
+            display: block;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+
+        .slider-group input[type="range"] {
+            width: 100%;
+            accent-color: #00d4ff;
+        }
+
+        .slider-value {
+            text-align: center;
+            font-size: 0.85em;
+            color: #00d4ff;
+            margin-top: 4px;
+        }
+
+        /* Dual-handle range slider */
+        .dual-range {
+            position: relative;
+            height: 20px;
+            margin: 8px 0;
+        }
+
+        .dual-range input[type="range"] {
+            position: absolute;
+            width: 100%;
+            height: 6px;
+            top: 7px;
+            pointer-events: none;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+
+        .dual-range input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #00d4ff;
+            cursor: pointer;
+            pointer-events: auto;
+            border: 2px solid #16213e;
+        }
+
+        .dual-range input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #00d4ff;
+            cursor: pointer;
+            pointer-events: auto;
+            border: 2px solid #16213e;
+        }
+
+        .dual-range-track {
+            position: absolute;
+            top: 7px;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: #2d2d44;
+            border-radius: 3px;
+        }
+
+        .dual-range-fill {
+            position: absolute;
+            top: 7px;
+            height: 6px;
+            background: #00d4ff;
+            border-radius: 3px;
+        }
+
+        /* Toggle */
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #2d2d44;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .toggle input {
+            display: none;
+        }
+
+        .toggle .slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #666;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .toggle input:checked + .slider {
+            left: 22px;
+            background: #00d4ff;
+        }
+
+        /* Map */
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Map Legend */
+        .map-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            background: rgba(22, 33, 62, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            z-index: 1000;
+            font-size: 0.8em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        /* Info Panel */
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            bottom: 10px;
+            width: 350px;
+            background: rgba(22, 33, 62, 0.98);
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+            overflow: hidden;
+        }
+
+        .info-panel.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-header {
+            padding: 15px;
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .info-header h3 {
+            font-size: 1.1em;
+            margin-bottom: 4px;
+        }
+
+        .info-header .system-id {
+            font-size: 0.85em;
+            opacity: 0.8;
+        }
+
+        .info-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #000;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+
+        .info-body {
+            padding: 15px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .info-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .info-meta-item {
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .info-meta-item .label {
+            font-size: 0.75em;
+            color: #888;
+        }
+
+        .info-meta-item .value {
+            font-size: 1em;
+            color: #fff;
+        }
+
+        .contaminant-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        .contaminant-table th {
+            text-align: left;
+            padding: 8px;
+            background: #1a1a2e;
+            color: #888;
+            font-weight: normal;
+        }
+
+        .contaminant-table td {
+            padding: 8px;
+            border-bottom: 1px solid #2d2d44;
+        }
+
+        .contaminant-table tr.violation td {
+            color: #ff6b6b;
+        }
+
+        .contaminant-table tbody tr {
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .contaminant-table tbody tr:hover {
+            background: #2d2d44;
+        }
+
+        .contaminant-table tbody tr.selected {
+            background: #1a3a5c;
+        }
+
+        .contaminant-table tbody tr.selected td:first-child::before {
+            content: '▼ ';
+            color: #00d4ff;
+        }
+
+        /* Inline chart row */
+        .contaminant-table tbody tr.chart-row {
+            cursor: default;
+        }
+
+        .contaminant-table tbody tr.chart-row:hover {
+            background: transparent;
+        }
+
+        .contaminant-chart-cell {
+            padding: 10px 8px !important;
+            background: #1a1a2e;
+        }
+
+        .contaminant-chart-cell svg {
+            width: 100%;
+            height: 100px;
+        }
+
+        .chart-label {
+            font-size: 0.75em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .level-bar {
+            height: 6px;
+            background: #2d2d44;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .level-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .level-bar-fill.safe {
+            background: #6bcb77;
+        }
+
+        .level-bar-fill.warning {
+            background: #ffd93d;
+        }
+
+        .level-bar-fill.danger {
+            background: #ff6b6b;
+        }
+
+        /* Trend Chart */
+        .trend-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #2d2d44;
+        }
+
+        .trend-section h4 {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        #trend-chart {
+            width: 100%;
+            height: 120px;
+        }
+
+        /* Loading */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2000;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #2d2d44;
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Welcome Modal */
+        .welcome-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .welcome-overlay.hidden {
+            display: none;
+        }
+
+        .welcome-modal {
+            background: #16213e;
+            border-radius: 12px;
+            max-width: 520px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .welcome-header {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            padding: 24px;
+            color: #000;
+        }
+
+        .welcome-header h2 {
+            font-size: 1.4em;
+            margin-bottom: 4px;
+        }
+
+        .welcome-header p {
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+
+        .welcome-body {
+            padding: 24px;
+        }
+
+        .welcome-body p {
+            margin-bottom: 16px;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .welcome-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            padding: 16px;
+            background: #1a1a2e;
+            border-radius: 8px;
+        }
+
+        .welcome-stat {
+            text-align: center;
+        }
+
+        .welcome-stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .welcome-stat-label {
+            font-size: 0.75em;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .welcome-legend {
+            display: flex;
+            gap: 16px;
+            margin: 16px 0;
+            font-size: 0.85em;
+        }
+
+        .welcome-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .welcome-legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .welcome-footer {
+            padding: 16px 24px;
+            background: #1a1a2e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .welcome-footer label {
+            font-size: 0.8em;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .welcome-footer input[type="checkbox"] {
+            accent-color: #00d4ff;
+        }
+
+        .welcome-btn {
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .welcome-btn:hover {
+            background: #00b8e6;
+        }
+
+        /* Year tabs */
+        .year-tabs {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .year-tab {
+            padding: 4px 10px;
+            background: #2d2d44;
+            border: none;
+            border-radius: 4px;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+
+        .year-tab.active {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .year-tab.has-violation {
+            color: #ff6b6b;
+        }
+
+        .year-tab.has-violation.active {
+            background: #ff6b6b;
+            color: #fff;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 40vh;
+            }
+
+            .info-panel {
+                width: calc(100% - 20px);
+                top: auto;
+                bottom: 10px;
+                max-height: 50vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Welcome Modal (hidden until data loads) -->
+    <div class="welcome-overlay hidden" id="welcome-modal">
+        <div class="welcome-modal">
+            <div class="welcome-header">
+                <h2>Texas Water Quality Dashboard</h2>
+                <p>Public data, finally usable</p>
+            </div>
+            <div class="welcome-body">
+                <p>
+                    Every year, Texas water utilities publish quality reports. The state posts them
+                    as Word documents behind a search form that only shows one system at a time.
+                    We downloaded all 100,000+ reports, extracted the data, and put it on a map.
+                </p>
+
+                <div class="welcome-stats">
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-value" id="stat-systems">--</div>
+                        <div class="welcome-stat-label">water systems</div>
+                    </div>
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-value" id="stat-violations">--</div>
+                        <div class="welcome-stat-label">with violations</div>
+                    </div>
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-value" id="stat-population">--</div>
+                        <div class="welcome-stat-label">people affected</div>
+                    </div>
+                </div>
+
+                <p>
+                    Click any marker to see contaminants detected, whether levels exceeded
+                    federal limits, and how they've changed over time. Use the sidebar filters
+                    to find specific issues.
+                </p>
+
+                <div class="welcome-legend">
+                    <div class="welcome-legend-item">
+                        <div class="welcome-legend-dot" style="background: #6bcb77;"></div>
+                        <span>No violations</span>
+                    </div>
+                    <div class="welcome-legend-item">
+                        <div class="welcome-legend-dot" style="background: #ffd93d;"></div>
+                        <span>Past violations</span>
+                    </div>
+                    <div class="welcome-legend-item">
+                        <div class="welcome-legend-dot" style="background: #ff6b6b;"></div>
+                        <span>Recent violations</span>
+                    </div>
+                </div>
+            </div>
+            <div class="welcome-footer">
+                <label>
+                    <input type="checkbox" id="welcome-dont-show">
+                    Don't show this again
+                </label>
+                <button class="welcome-btn" id="welcome-close">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Texas Water Quality</h1>
+                <div class="showing-count">Showing <span id="stat-showing">--</span></div>
+            </div>
+
+            <div>
+                <h2>Filter by Issue</h2>
+                <div class="featured-filters">
+                    <button class="featured-btn all active" data-filter="all">All Systems</button>
+                    <button class="featured-btn oil-gas" data-filter="oil_gas">Oil & Gas (BTEX)</button>
+                    <button class="featured-btn radioactive" data-filter="radioactive">Radioactive</button>
+                    <button class="featured-btn arsenic" data-filter="arsenic">Arsenic</button>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>Contaminant Categories</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="filter-oil_gas" checked>
+                        Oil & Gas (Benzene, Toluene, Xylene)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="filter-radioactive" checked>
+                        Radioactive (Radium, Uranium)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="filter-agricultural" checked>
+                        Agricultural (Nitrate, Nitrite)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="filter-heavy_metals" checked>
+                        Heavy Metals (Arsenic, Lead)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="filter-disinfection_byproducts" checked>
+                        Disinfection Byproducts
+                    </label>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>Filters</h3>
+
+                <div class="slider-group">
+                    <label>Year Range: <span id="year-min-val">2010</span> - <span id="year-max-val">2024</span></label>
+                    <div class="dual-range">
+                        <div class="dual-range-track"></div>
+                        <div class="dual-range-fill" id="year-range-fill"></div>
+                        <input type="range" id="year-min" min="2010" max="2024" value="2010">
+                        <input type="range" id="year-max" min="2010" max="2024" value="2024">
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <label>Population: <span id="pop-min-val">0</span> - <span id="pop-max-val">100k+</span></label>
+                    <div class="dual-range">
+                        <div class="dual-range-track"></div>
+                        <div class="dual-range-fill" id="pop-range-fill"></div>
+                        <input type="range" id="population-min" min="0" max="100000" step="1000" value="0">
+                        <input type="range" id="population-max" min="0" max="100000" step="1000" value="100000">
+                    </div>
+                </div>
+
+                <div class="toggle-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="violations-only">
+                        <span class="slider"></span>
+                    </label>
+                    <span>Violations Only</span>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>Map Display</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="radio" name="map-mode" value="markers" checked>
+                        Individual Markers
+                    </label>
+                    <label>
+                        <input type="radio" name="map-mode" value="heatmap">
+                        Heatmap
+                    </label>
+                </div>
+            </div>
+        </aside>
+
+        <main class="map-container">
+            <div id="map"></div>
+
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p style="margin-top: 10px;">Loading water quality data...</p>
+            </div>
+
+            <div class="map-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #6bcb77;"></div>
+                    <span>No violations</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ffd93d;"></div>
+                    <span>Past violations</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ff6b6b;"></div>
+                    <span>Recent violations</span>
+                </div>
+            </div>
+
+            <div class="info-panel" id="info-panel">
+                <div class="info-header">
+                    <button class="info-close" onclick="closeInfoPanel()">&times;</button>
+                    <h3 id="info-name">System Name</h3>
+                    <div class="system-id" id="info-id">TX0000000</div>
+                </div>
+                <div class="info-body">
+                    <div class="info-meta">
+                        <div class="info-meta-item">
+                            <div class="label">Population</div>
+                            <div class="value" id="info-population">--</div>
+                        </div>
+                        <div class="info-meta-item">
+                            <div class="label">County</div>
+                            <div class="value" id="info-county">--</div>
+                        </div>
+                        <div class="info-meta-item">
+                            <div class="label">Water Source</div>
+                            <div class="value" id="info-source">--</div>
+                        </div>
+                        <div class="info-meta-item">
+                            <div class="label">Total Violations</div>
+                            <div class="value" id="info-violations">--</div>
+                        </div>
+                    </div>
+
+                    <div class="year-tabs" id="year-tabs"></div>
+
+                    <table class="contaminant-table">
+                        <thead>
+                            <tr>
+                                <th>Contaminant</th>
+                                <th>Level</th>
+                                <th>MCL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contaminant-tbody">
+                        </tbody>
+                    </table>
+
+                    <div class="trend-section">
+                        <h4>Violation History</h4>
+                        <svg id="trend-chart"></svg>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Heat -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <!-- D3 -->
+    <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+
+    <script>
+        // Global state
+        let mapData = null;      // Minimal data for map markers
+        let detailsData = null;  // Full details (loaded in background)
+        let detailsLoading = false;
+        let detailsLoaded = false;
+        let map = null;
+        let markersLayer = null;
+        let heatLayer = null;
+        let currentMarkers = [];
+        let selectedSystem = null;
+        let selectedYear = null;
+        let selectedMarker = null;
+        let selectedRing = null;
+        let selectedContaminant = null;  // For contaminant time-series view
+
+        // Category colors
+        const CATEGORY_COLORS = {
+            oil_gas: '#ff6b6b',
+            radioactive: '#ffd93d',
+            heavy_metals: '#6bcb77',
+            agricultural: '#4dabf7',
+            disinfection_byproducts: '#cc5de8'
+        };
+
+        /**
+         * Expand map data (minimal) for marker rendering.
+         * Map data contains: s (systems with i, la, lo, p, v), st (stats), cat (categories)
+         */
+        function expandMapData(d) {
+            d.systems = d.s.map(s => ({
+                id: s.i,
+                lat: s.la,
+                lon: s.lo,
+                population: s.p,
+                violationStatus: s.v  // 0=none, 1=old, 2=recent (precomputed)
+            }));
+            d.stats = d.st;
+            d.categories = d.cat;
+            return d;
+        }
+
+        /**
+         * Merge details data into map systems.
+         * Details data contains: d (details by id), m (contaminant meta), cl (contaminant list)
+         */
+        function mergeDetailsData(mapD, detailsD) {
+            const details = detailsD.d;
+            const meta = detailsD.m;
+
+            for (const system of mapD.systems) {
+                const d = details[system.id];
+                if (!d) continue;
+
+                system.name = d.n;
+                system.county = d.c;
+                system.system_type = d.t;
+                system.water_source = d.ws;
+
+                // Expand years with contaminant metadata
+                if (d.y) {
+                    system.years = {};
+                    for (const [yr, yd] of Object.entries(d.y)) {
+                        system.years[yr] = {
+                            violations: yd.v || [],
+                            contaminants: {}
+                        };
+                        for (const [cname, level] of Object.entries(yd.c || {})) {
+                            const cmeta = meta[cname] || {};
+                            system.years[yr].contaminants[cname] = {
+                                level,
+                                mcl: cmeta.m,
+                                mclg: cmeta.g,
+                                units: cmeta.u,
+                                category: cmeta.ca,
+                                categories: cmeta.cs || []
+                            };
+                        }
+                    }
+                }
+            }
+
+            mapD.contaminant_list = detailsD.cl;
+            mapD.contaminant_meta = meta;
+            return mapD;
+        }
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map', {
+                center: [31.5, -99.5],
+                zoom: 6,
+                minZoom: 5,
+                maxZoom: 15
+            });
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+                maxZoom: 19
+            }).addTo(map);
+
+            markersLayer = L.layerGroup().addTo(map);
+        }
+
+        // Load map data (fast, renders immediately)
+        async function loadMapData() {
+            try {
+                const response = await fetch('dashboard_data_map.json');
+                mapData = await response.json();
+
+                // Expand minimal map data
+                expandMapData(mapData);
+
+                document.getElementById('loading').style.display = 'none';
+
+                // Update stats and show welcome modal
+                updateStats();
+                showWelcomeModal();
+
+                // Update year range sliders
+                if (mapData.stats && mapData.stats.year_range) {
+                    const minY = mapData.stats.year_range.min;
+                    const maxY = mapData.stats.year_range.max;
+                    document.getElementById('year-min').min = minY;
+                    document.getElementById('year-min').max = maxY;
+                    document.getElementById('year-min').value = minY;
+                    document.getElementById('year-max').min = minY;
+                    document.getElementById('year-max').max = maxY;
+                    document.getElementById('year-max').value = maxY;
+                    document.getElementById('year-min-val').textContent = minY;
+                    document.getElementById('year-max-val').textContent = maxY;
+                    updateYearRangeFill();
+                }
+
+                // Render map immediately with minimal data
+                renderMap();
+
+                // Start loading details in background
+                loadDetailsData();
+
+            } catch (err) {
+                console.error('Failed to load map data:', err);
+                document.getElementById('loading').innerHTML =
+                    '<p style="color: #ff6b6b;">Failed to load data. Run build_dashboard_data.py first.</p>';
+            }
+        }
+
+        // Load details data in background
+        async function loadDetailsData() {
+            if (detailsLoading || detailsLoaded) return;
+            detailsLoading = true;
+
+            try {
+                const response = await fetch('dashboard_data_details.json');
+                detailsData = await response.json();
+
+                // Merge details into map data
+                mergeDetailsData(mapData, detailsData);
+
+                detailsLoaded = true;
+                detailsLoading = false;
+
+                // If info panel is open and waiting for details, refresh it
+                if (selectedSystem) {
+                    const system = mapData.systems.find(s => s.id === selectedSystem.id);
+                    if (system) {
+                        selectedSystem = system;
+                        refreshInfoPanel();
+                    }
+                }
+
+            } catch (err) {
+                console.error('Failed to load details data:', err);
+                detailsLoading = false;
+            }
+        }
+
+        // Update stats display
+        function updateStats() {
+            if (!mapData || !mapData.stats) return;
+
+            document.getElementById('stat-systems').textContent =
+                mapData.stats.total_systems?.toLocaleString() || '--';
+            document.getElementById('stat-violations').textContent =
+                mapData.stats.systems_with_violations?.toLocaleString() || '--';
+            document.getElementById('stat-population').textContent =
+                formatPopulation(mapData.stats.population_affected);
+        }
+
+        function formatPopulation(pop) {
+            if (!pop) return '--';
+            if (pop >= 1000000) return (pop / 1000000).toFixed(1) + 'M';
+            if (pop >= 1000) return (pop / 1000).toFixed(0) + 'K';
+            return pop.toLocaleString();
+        }
+
+        // Get current filter settings
+        function getFilters() {
+            return {
+                categories: {
+                    oil_gas: document.getElementById('filter-oil_gas').checked,
+                    radioactive: document.getElementById('filter-radioactive').checked,
+                    agricultural: document.getElementById('filter-agricultural').checked,
+                    heavy_metals: document.getElementById('filter-heavy_metals').checked,
+                    disinfection_byproducts: document.getElementById('filter-disinfection_byproducts').checked
+                },
+                yearMin: parseInt(document.getElementById('year-min').value),
+                yearMax: parseInt(document.getElementById('year-max').value),
+                populationMin: parseInt(document.getElementById('population-min').value),
+                populationMax: parseInt(document.getElementById('population-max').value),
+                violationsOnly: document.getElementById('violations-only').checked,
+                mapMode: document.querySelector('input[name="map-mode"]:checked').value
+            };
+        }
+
+        // Check if system matches filters
+        function systemMatchesFilters(system, filters) {
+            // Population filter
+            if (system.population < filters.populationMin) return false;
+            // Only filter by max if it's not at the maximum (100k+ means no upper limit)
+            if (filters.populationMax < 100000 && system.population > filters.populationMax) return false;
+
+            // Must have coordinates
+            if (!system.lat || !system.lon) return false;
+
+            // Before details are loaded, use precomputed violation status for basic filtering
+            if (!detailsLoaded) {
+                // violationStatus: 0=none, 1=old, 2=recent
+                if (filters.violationsOnly && system.violationStatus === 0) return false;
+                return true;  // Show all systems until details are loaded
+            }
+
+            // Check years and violations (only when details are loaded)
+            let hasMatchingYear = false;
+            let hasAnyViolation = false;
+            let hasMatchingCategory = false;
+            let hasViolationInCategory = false;
+
+            const anyCategory = Object.values(filters.categories).some(v => v);
+
+            for (const [year, yearData] of Object.entries(system.years || {})) {
+                const y = parseInt(year);
+                if (y < filters.yearMin || y > filters.yearMax) continue;
+
+                hasMatchingYear = true;
+
+                const violations = new Set(yearData.violations || []);
+                if (violations.size > 0) {
+                    hasAnyViolation = true;
+                }
+
+                // Check categories and violations within those categories
+                for (const [cname, cdata] of Object.entries(yearData.contaminants || {})) {
+                    const cats = cdata.categories || [];
+                    for (const cat of cats) {
+                        if (filters.categories[cat]) {
+                            hasMatchingCategory = true;
+                            if (violations.has(cname)) {
+                                hasViolationInCategory = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If no category filters are checked, show all categories
+            if (!anyCategory) {
+                hasMatchingCategory = true;
+                hasViolationInCategory = hasAnyViolation;
+            }
+
+            // Violations-only filter: require violation in selected category
+            if (filters.violationsOnly && !hasViolationInCategory) return false;
+
+            // Must have data in at least one selected category
+            if (anyCategory && !hasMatchingCategory) return false;
+
+            return hasMatchingYear || Object.keys(system.years || {}).length === 0;
+        }
+
+        // Get marker color based on violations
+        function getMarkerColor(system, filters) {
+            // Use precomputed status when details aren't loaded
+            if (!detailsLoaded) {
+                // violationStatus: 0=none, 1=old, 2=recent
+                if (system.violationStatus === 2) return '#ff6b6b';
+                if (system.violationStatus === 1) return '#ffd93d';
+                return '#6bcb77';
+            }
+
+            // When details are loaded, compute based on filtered year range
+            let hasRecentViolation = false;
+            let hasOldViolation = false;
+            const recentThreshold = filters.yearMax - 2;
+
+            for (const [year, yearData] of Object.entries(system.years || {})) {
+                const y = parseInt(year);
+                if (y < filters.yearMin || y > filters.yearMax) continue;
+
+                if (yearData.violations && yearData.violations.length > 0) {
+                    if (y >= recentThreshold) {
+                        hasRecentViolation = true;
+                    } else {
+                        hasOldViolation = true;
+                    }
+                }
+            }
+
+            if (hasRecentViolation) return '#ff6b6b';
+            if (hasOldViolation) return '#ffd93d';
+            return '#6bcb77';
+        }
+
+        // Create marker for system
+        function createMarker(system, filters) {
+            const color = getMarkerColor(system, filters);
+            const radius = Math.min(8, Math.max(4, Math.log10(system.population + 1) * 2));
+
+            const marker = L.circleMarker([system.lat, system.lon], {
+                radius: radius,
+                fillColor: color,
+                color: '#fff',
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: 0.7
+            });
+
+            marker.on('click', () => showInfoPanel(system, marker));
+
+            return marker;
+        }
+
+        // Render map with current filters
+        function renderMap() {
+            if (!mapData) return;
+
+            const filters = getFilters();
+
+            // Clear selected marker state
+            selectedMarker = null;
+            selectedRing = null;
+
+            // Clear existing
+            markersLayer.clearLayers();
+            if (heatLayer) {
+                map.removeLayer(heatLayer);
+                heatLayer = null;
+            }
+
+            currentMarkers = [];
+            let showingCount = 0;
+
+            const heatData = [];
+
+            for (const system of mapData.systems) {
+                if (!systemMatchesFilters(system, filters)) continue;
+
+                showingCount++;
+
+                if (filters.mapMode === 'heatmap') {
+                    // Weight by violation status (use precomputed when details not loaded)
+                    let weight = 0.3;
+                    if (detailsLoaded) {
+                        for (const yearData of Object.values(system.years || {})) {
+                            weight += (yearData.violations?.length || 0) * 0.2;
+                        }
+                    } else {
+                        // Use precomputed violation status
+                        weight = system.violationStatus === 2 ? 1.0 :
+                                 system.violationStatus === 1 ? 0.6 : 0.3;
+                    }
+                    heatData.push([system.lat, system.lon, Math.min(weight, 1)]);
+                } else {
+                    const marker = createMarker(system, filters);
+                    markersLayer.addLayer(marker);
+                    currentMarkers.push({ marker, system });
+                }
+            }
+
+            if (filters.mapMode === 'heatmap' && heatData.length > 0) {
+                heatLayer = L.heatLayer(heatData, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 10,
+                    gradient: {
+                        0.0: '#6bcb77',
+                        0.5: '#ffd93d',
+                        1.0: '#ff6b6b'
+                    }
+                }).addTo(map);
+            }
+
+            document.getElementById('stat-showing').textContent = showingCount.toLocaleString();
+        }
+
+        // Decode HTML entities like &amp; -> &
+        function decodeHtml(text) {
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
+        }
+
+        // Clear selected marker highlight
+        function clearSelectedMarker() {
+            if (selectedMarker) {
+                selectedMarker.setStyle({
+                    weight: 1,
+                    color: '#fff'
+                });
+            }
+            if (selectedRing) {
+                markersLayer.removeLayer(selectedRing);
+                selectedRing = null;
+            }
+            selectedMarker = null;
+        }
+
+        // Show info panel for a system
+        function showInfoPanel(system, marker) {
+            // Clear previous selection
+            clearSelectedMarker();
+
+            selectedSystem = system;
+            selectedMarker = marker || null;
+
+            // Highlight selected marker
+            if (selectedMarker) {
+                selectedMarker.setStyle({
+                    weight: 3,
+                    color: '#00ffff'
+                });
+                selectedMarker.bringToFront();
+
+                // Add outer highlight ring
+                const latlng = selectedMarker.getLatLng();
+                selectedRing = L.circleMarker(latlng, {
+                    radius: selectedMarker.getRadius() + 10,
+                    fillColor: 'transparent',
+                    fillOpacity: 0,
+                    color: '#00ffff',
+                    weight: 5,
+                    opacity: 1
+                });
+                markersLayer.addLayer(selectedRing);
+                selectedMarker.bringToFront();
+            }
+
+            // Show basic info (always available from map data)
+            document.getElementById('info-id').textContent = system.id;
+            document.getElementById('info-population').textContent = (system.population || 0).toLocaleString();
+
+            // Check if details are loaded
+            if (!detailsLoaded) {
+                // Show loading state
+                document.getElementById('info-name').textContent = 'Loading...';
+                document.getElementById('info-county').textContent = 'Loading...';
+                document.getElementById('info-source').textContent = 'Loading...';
+                document.getElementById('info-violations').textContent = '--';
+                document.getElementById('year-tabs').innerHTML = '';
+                document.getElementById('contaminant-tbody').innerHTML =
+                    '<tr><td colspan="3" style="text-align: center; color: #888;">Loading details...</td></tr>';
+
+                // Clear trend chart
+                const svg = d3.select('#trend-chart');
+                svg.selectAll('*').remove();
+                svg.append('text')
+                    .attr('x', 150)
+                    .attr('y', 60)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', '#888')
+                    .attr('font-size', '12px')
+                    .text('Loading...');
+
+                document.getElementById('info-panel').classList.add('active');
+                return;
+            }
+
+            // Full details available
+            refreshInfoPanel();
+            document.getElementById('info-panel').classList.add('active');
+        }
+
+        // Refresh info panel with full details (called when details load)
+        function refreshInfoPanel() {
+            if (!selectedSystem) return;
+            const system = selectedSystem;
+
+            // Reset contaminant selection when refreshing
+            selectedContaminant = null;
+
+            document.getElementById('info-name').textContent = decodeHtml(system.name || 'Unknown');
+            document.getElementById('info-county').textContent = system.county || 'Unknown';
+            document.getElementById('info-source').textContent = system.water_source || 'Unknown';
+
+            // Count total violations
+            let totalViolations = 0;
+            for (const yearData of Object.values(system.years || {})) {
+                totalViolations += yearData.violations?.length || 0;
+            }
+            document.getElementById('info-violations').textContent = totalViolations;
+
+            // Build year tabs
+            const yearTabs = document.getElementById('year-tabs');
+            yearTabs.innerHTML = '';
+
+            const years = Object.keys(system.years || {}).sort((a, b) => b - a);
+            if (years.length > 0) {
+                selectedYear = years[0];
+
+                for (const year of years) {
+                    const btn = document.createElement('button');
+                    btn.className = 'year-tab';
+                    btn.textContent = year;
+                    btn.dataset.year = year;
+
+                    if (system.years[year].violations?.length > 0) {
+                        btn.classList.add('has-violation');
+                    }
+                    if (year === selectedYear) {
+                        btn.classList.add('active');
+                    }
+
+                    btn.onclick = () => {
+                        document.querySelectorAll('.year-tab').forEach(t => t.classList.remove('active'));
+                        btn.classList.add('active');
+                        selectedYear = year;
+                        selectedContaminant = null;  // Reset contaminant selection
+                        updateContaminantTable(system, year);
+                    };
+
+                    yearTabs.appendChild(btn);
+                }
+
+                updateContaminantTable(system, selectedYear);
+            } else {
+                document.getElementById('contaminant-tbody').innerHTML =
+                    '<tr><td colspan="3" style="text-align: center; color: #888;">No data available</td></tr>';
+            }
+
+            // Draw trend chart
+            drawTrendChart(system);
+        }
+
+        function closeInfoPanel() {
+            document.getElementById('info-panel').classList.remove('active');
+            clearSelectedMarker();
+            selectedSystem = null;
+        }
+
+        // Update contaminant table for selected year
+        function updateContaminantTable(system, year) {
+            const tbody = document.getElementById('contaminant-tbody');
+            tbody.innerHTML = '';
+
+            const yearData = system.years?.[year];
+            if (!yearData || !yearData.contaminants) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #888;">No data</td></tr>';
+                return;
+            }
+
+            const violations = new Set(yearData.violations || []);
+
+            // Sort contaminants: violations first, then by level/mcl ratio
+            const contaminants = Object.entries(yearData.contaminants)
+                .map(([name, data]) => ({ name, ...data }))
+                .sort((a, b) => {
+                    const aViol = violations.has(a.name) ? 1 : 0;
+                    const bViol = violations.has(b.name) ? 1 : 0;
+                    if (aViol !== bViol) return bViol - aViol;
+
+                    const aRatio = a.mcl ? (a.level / a.mcl) : 0;
+                    const bRatio = b.mcl ? (b.level / b.mcl) : 0;
+                    return bRatio - aRatio;
+                });
+
+            for (const c of contaminants) {
+                const tr = document.createElement('tr');
+                if (violations.has(c.name)) {
+                    tr.classList.add('violation');
+                }
+                if (selectedContaminant === c.name) {
+                    tr.classList.add('selected');
+                }
+
+                const ratio = c.mcl ? (c.level / c.mcl) : 0;
+                let barClass = 'safe';
+                if (ratio > 1) barClass = 'danger';
+                else if (ratio > 0.8) barClass = 'warning';
+
+                tr.innerHTML = `
+                    <td>
+                        ${c.name}
+                        <div class="level-bar">
+                            <div class="level-bar-fill ${barClass}" style="width: ${Math.min(100, ratio * 100)}%"></div>
+                        </div>
+                    </td>
+                    <td>${c.level ?? '--'} ${c.units || ''}</td>
+                    <td>${c.mcl ?? '--'} ${c.units || ''}</td>
+                `;
+
+                // Click to show inline time-series chart for this contaminant
+                tr.onclick = () => {
+                    // Remove any existing chart row
+                    const existingChart = tbody.querySelector('.chart-row');
+                    if (existingChart) existingChart.remove();
+
+                    // Update selection styling
+                    tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected'));
+
+                    if (selectedContaminant === c.name) {
+                        // Clicking again deselects
+                        selectedContaminant = null;
+                    } else {
+                        // Select this contaminant and insert chart row below
+                        selectedContaminant = c.name;
+                        tr.classList.add('selected');
+
+                        const chartRow = document.createElement('tr');
+                        chartRow.className = 'chart-row';
+                        chartRow.innerHTML = `
+                            <td colspan="3" class="contaminant-chart-cell">
+                                <div class="chart-label">${c.name} over time</div>
+                                <svg id="inline-contaminant-chart"></svg>
+                            </td>
+                        `;
+                        tr.after(chartRow);
+
+                        // Draw the chart in the new row
+                        drawContaminantChartInline(system, c.name, c.mcl, c.units);
+                    }
+                };
+
+                tbody.appendChild(tr);
+            }
+        }
+
+        // Draw violation trend chart
+        function drawTrendChart(system) {
+            const svg = d3.select('#trend-chart');
+            svg.selectAll('*').remove();
+
+            const width = svg.node().getBoundingClientRect().width || 300;
+            const height = 120;
+            const margin = { top: 10, right: 10, bottom: 25, left: 30 };
+
+            const years = Object.keys(system.years || {}).sort();
+            if (years.length < 2) {
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', '#888')
+                    .attr('font-size', '12px')
+                    .text('Insufficient data for trend');
+                return;
+            }
+
+            const dataPoints = years.map(y => ({
+                year: parseInt(y),
+                violations: system.years[y].violations?.length || 0
+            }));
+
+            const x = d3.scaleLinear()
+                .domain(d3.extent(dataPoints, d => d.year))
+                .range([margin.left, width - margin.right]);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(dataPoints, d => d.violations) || 1])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+
+            // Area
+            const area = d3.area()
+                .x(d => x(d.year))
+                .y0(height - margin.bottom)
+                .y1(d => y(d.violations))
+                .curve(d3.curveMonotoneX);
+
+            svg.append('path')
+                .datum(dataPoints)
+                .attr('fill', 'rgba(255, 107, 107, 0.3)')
+                .attr('d', area);
+
+            // Line
+            const line = d3.line()
+                .x(d => x(d.year))
+                .y(d => y(d.violations))
+                .curve(d3.curveMonotoneX);
+
+            svg.append('path')
+                .datum(dataPoints)
+                .attr('fill', 'none')
+                .attr('stroke', '#ff6b6b')
+                .attr('stroke-width', 2)
+                .attr('d', line);
+
+            // Points
+            svg.selectAll('circle')
+                .data(dataPoints)
+                .join('circle')
+                .attr('cx', d => x(d.year))
+                .attr('cy', d => y(d.violations))
+                .attr('r', 4)
+                .attr('fill', '#ff6b6b');
+
+            // X axis
+            svg.append('g')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format('d')))
+                .attr('color', '#888')
+                .attr('font-size', '10px');
+
+            // Y axis
+            svg.append('g')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).ticks(3))
+                .attr('color', '#888')
+                .attr('font-size', '10px');
+        }
+
+        // Draw contaminant level over time chart (inline version)
+        function drawContaminantChartInline(system, contaminantName, mcl, units) {
+            const svg = d3.select('#inline-contaminant-chart');
+            svg.selectAll('*').remove();
+
+            const width = svg.node().getBoundingClientRect().width || 280;
+            const height = 100;
+            const margin = { top: 8, right: 10, bottom: 22, left: 35 };
+
+            // Collect data points across all years
+            const years = Object.keys(system.years || {}).sort();
+            const dataPoints = [];
+
+            for (const year of years) {
+                const yearData = system.years[year];
+                const contaminant = yearData.contaminants?.[contaminantName];
+                if (contaminant && contaminant.level != null) {
+                    const violations = new Set(yearData.violations || []);
+                    dataPoints.push({
+                        year: parseInt(year),
+                        level: contaminant.level,
+                        violation: violations.has(contaminantName)
+                    });
+                }
+            }
+
+            if (dataPoints.length < 1) {
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', '#888')
+                    .attr('font-size', '12px')
+                    .text('No data available');
+                return;
+            }
+
+            // X scale
+            const xDomain = dataPoints.length === 1
+                ? [dataPoints[0].year - 1, dataPoints[0].year + 1]
+                : d3.extent(dataPoints, d => d.year);
+
+            const x = d3.scaleLinear()
+                .domain(xDomain)
+                .range([margin.left, width - margin.right]);
+
+            // Y scale - include MCL in domain if present
+            const maxLevel = d3.max(dataPoints, d => d.level) || 0;
+            const yMax = mcl ? Math.max(maxLevel * 1.1, mcl * 1.2) : maxLevel * 1.1;
+
+            const y = d3.scaleLinear()
+                .domain([0, yMax || 1])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+
+            // Draw MCL line if available
+            if (mcl) {
+                svg.append('line')
+                    .attr('x1', margin.left)
+                    .attr('x2', width - margin.right)
+                    .attr('y1', y(mcl))
+                    .attr('y2', y(mcl))
+                    .attr('stroke', '#ff6b6b')
+                    .attr('stroke-width', 1.5)
+                    .attr('stroke-dasharray', '4,3');
+
+                svg.append('text')
+                    .attr('x', width - margin.right - 3)
+                    .attr('y', y(mcl) - 4)
+                    .attr('text-anchor', 'end')
+                    .attr('fill', '#ff6b6b')
+                    .attr('font-size', '9px')
+                    .text('MCL');
+            }
+
+            // Area under line
+            if (dataPoints.length > 1) {
+                const area = d3.area()
+                    .x(d => x(d.year))
+                    .y0(height - margin.bottom)
+                    .y1(d => y(d.level))
+                    .curve(d3.curveMonotoneX);
+
+                svg.append('path')
+                    .datum(dataPoints)
+                    .attr('fill', 'rgba(0, 212, 255, 0.2)')
+                    .attr('d', area);
+
+                // Line
+                const line = d3.line()
+                    .x(d => x(d.year))
+                    .y(d => y(d.level))
+                    .curve(d3.curveMonotoneX);
+
+                svg.append('path')
+                    .datum(dataPoints)
+                    .attr('fill', 'none')
+                    .attr('stroke', '#00d4ff')
+                    .attr('stroke-width', 2)
+                    .attr('d', line);
+            }
+
+            // Points (red if violation, cyan otherwise)
+            svg.selectAll('circle')
+                .data(dataPoints)
+                .join('circle')
+                .attr('cx', d => x(d.year))
+                .attr('cy', d => y(d.level))
+                .attr('r', 5)
+                .attr('fill', d => d.violation ? '#ff6b6b' : '#00d4ff')
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 1);
+
+            // X axis
+            svg.append('g')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).ticks(Math.min(5, dataPoints.length)).tickFormat(d3.format('d')))
+                .attr('color', '#888')
+                .attr('font-size', '10px');
+
+            // Y axis
+            svg.append('g')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).ticks(3))
+                .attr('color', '#888')
+                .attr('font-size', '10px');
+
+            // Units label
+            if (units) {
+                svg.append('text')
+                    .attr('x', margin.left + 3)
+                    .attr('y', margin.top + 10)
+                    .attr('fill', '#666')
+                    .attr('font-size', '9px')
+                    .text(units);
+            }
+        }
+
+        // Featured filter buttons
+        document.querySelectorAll('.featured-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filter = btn.dataset.filter;
+
+                document.querySelectorAll('.featured-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Set category checkboxes based on filter
+                const categories = ['oil_gas', 'radioactive', 'agricultural', 'heavy_metals', 'disinfection_byproducts'];
+
+                if (filter === 'all') {
+                    categories.forEach(cat => {
+                        document.getElementById(`filter-${cat}`).checked = true;
+                    });
+                    document.getElementById('violations-only').checked = false;
+                } else if (filter === 'arsenic') {
+                    categories.forEach(cat => {
+                        document.getElementById(`filter-${cat}`).checked = cat === 'heavy_metals';
+                    });
+                    document.getElementById('violations-only').checked = true;
+                } else {
+                    categories.forEach(cat => {
+                        document.getElementById(`filter-${cat}`).checked = cat === filter;
+                    });
+                    document.getElementById('violations-only').checked = true;
+                }
+
+                renderMap();
+            });
+        });
+
+        // Filter change listeners
+        document.querySelectorAll('.filter-section input').forEach(input => {
+            input.addEventListener('change', () => {
+                // Update active featured button
+                document.querySelectorAll('.featured-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('.featured-btn.all').classList.add('active');
+                renderMap();
+            });
+        });
+
+        // Year range slider
+        function updateYearRangeFill() {
+            const minEl = document.getElementById('year-min');
+            const maxEl = document.getElementById('year-max');
+            const fill = document.getElementById('year-range-fill');
+            const min = parseInt(minEl.min);
+            const max = parseInt(minEl.max);
+            const minVal = parseInt(minEl.value);
+            const maxVal = parseInt(maxEl.value);
+            const leftPct = ((minVal - min) / (max - min)) * 100;
+            const rightPct = ((maxVal - min) / (max - min)) * 100;
+            fill.style.left = leftPct + '%';
+            fill.style.width = (rightPct - leftPct) + '%';
+        }
+
+        document.getElementById('year-min').addEventListener('input', (e) => {
+            const maxEl = document.getElementById('year-max');
+            if (parseInt(e.target.value) > parseInt(maxEl.value)) {
+                e.target.value = maxEl.value;
+            }
+            document.getElementById('year-min-val').textContent = e.target.value;
+            updateYearRangeFill();
+            renderMap();
+        });
+
+        document.getElementById('year-max').addEventListener('input', (e) => {
+            const minEl = document.getElementById('year-min');
+            if (parseInt(e.target.value) < parseInt(minEl.value)) {
+                e.target.value = minEl.value;
+            }
+            document.getElementById('year-max-val').textContent = e.target.value;
+            updateYearRangeFill();
+            renderMap();
+        });
+
+        // Population range slider
+        function formatPop(val) {
+            val = parseInt(val);
+            if (val >= 100000) return '100k+';
+            if (val >= 1000) return Math.round(val / 1000) + 'k';
+            return val.toLocaleString();
+        }
+
+        function updatePopRangeFill() {
+            const minEl = document.getElementById('population-min');
+            const maxEl = document.getElementById('population-max');
+            const fill = document.getElementById('pop-range-fill');
+            const min = parseInt(minEl.min);
+            const max = parseInt(minEl.max);
+            const minVal = parseInt(minEl.value);
+            const maxVal = parseInt(maxEl.value);
+            const leftPct = ((minVal - min) / (max - min)) * 100;
+            const rightPct = ((maxVal - min) / (max - min)) * 100;
+            fill.style.left = leftPct + '%';
+            fill.style.width = (rightPct - leftPct) + '%';
+        }
+
+        document.getElementById('population-min').addEventListener('input', (e) => {
+            const maxEl = document.getElementById('population-max');
+            if (parseInt(e.target.value) > parseInt(maxEl.value)) {
+                e.target.value = maxEl.value;
+            }
+            document.getElementById('pop-min-val').textContent = formatPop(e.target.value);
+            updatePopRangeFill();
+            renderMap();
+        });
+
+        document.getElementById('population-max').addEventListener('input', (e) => {
+            const minEl = document.getElementById('population-min');
+            if (parseInt(e.target.value) < parseInt(minEl.value)) {
+                e.target.value = minEl.value;
+            }
+            document.getElementById('pop-max-val').textContent = formatPop(e.target.value);
+            updatePopRangeFill();
+            renderMap();
+        });
+
+        // Initialize population range fill
+        updatePopRangeFill();
+
+        // Map mode radio buttons
+        document.querySelectorAll('input[name="map-mode"]').forEach(input => {
+            input.addEventListener('change', renderMap);
+        });
+
+        // Welcome modal
+        function initWelcomeModal() {
+            const modal = document.getElementById('welcome-modal');
+            const closeBtn = document.getElementById('welcome-close');
+            const dontShowCheckbox = document.getElementById('welcome-dont-show');
+
+            // Close button
+            closeBtn.addEventListener('click', () => {
+                if (dontShowCheckbox.checked) {
+                    localStorage.setItem('hideWelcome', 'true');
+                }
+                modal.classList.add('hidden');
+            });
+
+            // Click outside to close
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    if (dontShowCheckbox.checked) {
+                        localStorage.setItem('hideWelcome', 'true');
+                    }
+                    modal.classList.add('hidden');
+                }
+            });
+
+            // Escape key to close
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    modal.classList.add('hidden');
+                }
+            });
+        }
+
+        function showWelcomeModal() {
+            // Only show if user hasn't dismissed before
+            if (localStorage.getItem('hideWelcome') !== 'true') {
+                document.getElementById('welcome-modal').classList.remove('hidden');
+            }
+        }
+
+        // Initialize
+        initWelcomeModal();
+        initMap();
+        loadMapData();
+    </script>
+</body>
+</html>
