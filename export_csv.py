@@ -1,9 +1,17 @@
-#!/usr/bin/env python3
-"""Export water quality data to CSV (long format)."""
-
 import json
 import csv
+import re
 from pathlib import Path
+
+
+def clean_field(text):
+    """Normalize whitespace and remove newlines from text fields."""
+    if not isinstance(text, str):
+        return text
+    # Replace newlines and tabs with space
+    text = text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+    # Collapse multiple spaces
+    return re.sub(r'\s+', ' ', text).strip()
 
 
 def main():
@@ -20,7 +28,7 @@ def main():
     contaminant_meta = details['m']
 
     row_count = 0
-    with open('texas_water_quality.csv', 'w', newline='') as f:
+    with open('texas_water_quality.csv', 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
             'system_id', 'system_name', 'county', 'latitude', 'longitude',
@@ -39,25 +47,21 @@ def main():
 
                     writer.writerow([
                         sys_id,
-                        sys_details.get('n', ''),
-                        sys_details.get('c', ''),
+                        clean_field(sys_details.get('n', '')),
+                        clean_field(sys_details.get('c', '')),
                         map_sys.get('la', ''),
                         map_sys.get('lo', ''),
                         map_sys.get('p', ''),
                         year,
-                        sys_details.get('ws', ''),
-                        contaminant,
-                        meta.get('ca', ''),
+                        clean_field(sys_details.get('ws', '')),
+                        clean_field(contaminant),
+                        clean_field(meta.get('ca', '')),
                         level,
                         meta.get('m', ''),
                         meta.get('g', ''),
-                        meta.get('u', ''),
+                        clean_field(meta.get('u', '')),
                         contaminant in violations
                     ])
                     row_count += 1
 
     print(f"Exported {row_count:,} rows to texas_water_quality.csv")
-
-
-if __name__ == '__main__':
-    main()
