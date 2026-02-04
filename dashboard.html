@@ -1147,6 +1147,39 @@
                 selectedContaminantsForHeatmap.size + ' selected';
         }
 
+        // Select contaminants by filter category (for featured buttons in concentration mode)
+        function selectContaminantsByCategory(filterCategory) {
+            // Clear current selections
+            selectedContaminantsForHeatmap.clear();
+
+            // Uncheck all checkboxes first
+            document.querySelectorAll('#contaminant-categories input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+
+            if (!filterCategory || filterCategory === 'all') {
+                updateSelectedCount();
+                return;
+            }
+
+            // Find and select contaminants matching the filter category
+            for (const [name, meta] of Object.entries(mapData.contaminant_meta || {})) {
+                const categories = meta.cs || [];
+                const matchesFilter = filterCategory === 'arsenic'
+                    ? name === 'Arsenic'
+                    : categories.includes(filterCategory);
+
+                if (matchesFilter) {
+                    selectedContaminantsForHeatmap.add(name);
+                    // Check the corresponding checkbox
+                    const cb = document.querySelector(`#contaminant-categories input[value="${name}"]`);
+                    if (cb) cb.checked = true;
+                }
+            }
+
+            updateSelectedCount();
+        }
+
         // Compute min/max ranges for selected contaminants across visible systems
         function computeContaminantRanges(filters) {
             const ranges = {};
@@ -1472,8 +1505,8 @@
         }
 
         // Create marker for system
-        function createMarker(system, filters, ranges) {
-            const color = getMarkerColor(system, filters, ranges);
+        function createMarker(system, filters, ranges, color) {
+            color = color || getMarkerColor(system, filters, ranges);
             const radius = Math.min(8, Math.max(4, Math.log10(system.population + 1) * 2));
 
             const marker = L.circleMarker([system.lat, system.lon], {
@@ -1521,23 +1554,65 @@
             for (const system of mapData.systems) {
                 if (!systemMatchesFilters(system, filters)) continue;
 
-                showingCount++;
-
                 if (filters.mapMode === 'heatmap') {
-                    // Weight by violation status (use precomputed when details not loaded)
                     let weight = 0.3;
-                    if (detailsLoaded) {
-                        for (const yearData of Object.values(system.years || {})) {
-                            weight += (yearData.violations?.length || 0) * 0.2;
+
+                    if (colorMode === 'concentration' && detailsLoaded && selectedContaminantsForHeatmap.size > 0) {
+                        // Weight by concentration level
+                        let totalNormalized = 0;
+                        let contaminantsWithData = 0;
+
+                        for (const cname of selectedContaminantsForHeatmap) {
+                            const range = ranges[cname];
+                            if (!range || range.max === range.min) continue;
+
+                            let maxLevel = null;
+                            for (const [year, yearData] of Object.entries(system.years || {})) {
+                                const y = parseInt(year);
+                                if (y < filters.yearMin || y > filters.yearMax) continue;
+                                const c = yearData.contaminants?.[cname];
+                                if (c?.level != null) {
+                                    maxLevel = maxLevel === null ? c.level : Math.max(maxLevel, c.level);
+                                }
+                            }
+
+                            if (maxLevel !== null) {
+                                const normalized = (maxLevel - range.min) / (range.max - range.min);
+                                totalNormalized += normalized;
+                                contaminantsWithData++;
+                            }
+                        }
+
+                        if (contaminantsWithData > 0) {
+                            weight = totalNormalized / contaminantsWithData;
+                        } else {
+                            continue; // Skip systems with no data for selected contaminants
                         }
                     } else {
-                        // Use precomputed violation status
-                        weight = system.violationStatus === 2 ? 1.0 :
-                                 system.violationStatus === 1 ? 0.6 : 0.3;
+                        // Existing violation-based weighting
+                        if (detailsLoaded) {
+                            for (const yearData of Object.values(system.years || {})) {
+                                weight += (yearData.violations?.length || 0) * 0.2;
+                            }
+                        } else {
+                            weight = system.violationStatus === 2 ? 1.0 :
+                                     system.violationStatus === 1 ? 0.6 : 0.3;
+                        }
                     }
+
+                    showingCount++;
                     heatData.push([system.lat, system.lon, Math.min(weight, 1)]);
                 } else {
-                    const marker = createMarker(system, filters, ranges);
+                    // Marker mode
+                    const color = getMarkerColor(system, filters, ranges);
+
+                    // Skip "no data" markers in concentration mode
+                    if (colorMode === 'concentration' && color === '#888') {
+                        continue;
+                    }
+
+                    showingCount++;
+                    const marker = createMarker(system, filters, ranges, color);
                     markersLayer.addLayer(marker);
                     currentMarkers.push({ marker, system });
                 }
@@ -2067,6 +2142,11 @@
                         document.getElementById(`filter-${cat}`).checked = cat === filter;
                     });
                     document.getElementById('violations-only').checked = true;
+                }
+
+                // In concentration mode, also select the matching contaminants
+                if (colorMode === 'concentration') {
+                    selectContaminantsByCategory(filter);
                 }
 
                 renderMap();
