@@ -1181,10 +1181,12 @@
         }
 
         // Compute min/max ranges for selected contaminants across visible systems
+        // Also computes maxSum for cumulative scoring
         function computeContaminantRanges(filters) {
             const ranges = {};
-            if (selectedContaminantsForHeatmap.size === 0) return ranges;
+            if (selectedContaminantsForHeatmap.size === 0) return { ranges, maxSum: 0 };
 
+            // First pass: compute min/max for each contaminant
             for (const cname of selectedContaminantsForHeatmap) {
                 let min = Infinity;
                 let max = -Infinity;
@@ -1209,7 +1211,35 @@
                 }
             }
 
-            return ranges;
+            // Second pass: compute max sum of normalized values across all systems
+            let maxSum = 0;
+            for (const system of mapData.systems) {
+                if (!systemMatchesFilters(system, filters)) continue;
+
+                let systemSum = 0;
+                for (const cname of selectedContaminantsForHeatmap) {
+                    const range = ranges[cname];
+                    if (!range || range.max === range.min) continue;
+
+                    let maxLevel = null;
+                    for (const [year, yearData] of Object.entries(system.years || {})) {
+                        const y = parseInt(year);
+                        if (y < filters.yearMin || y > filters.yearMax) continue;
+                        const c = yearData.contaminants?.[cname];
+                        if (c?.level != null) {
+                            maxLevel = maxLevel === null ? c.level : Math.max(maxLevel, c.level);
+                        }
+                    }
+
+                    if (maxLevel !== null) {
+                        const normalized = (maxLevel - range.min) / (range.max - range.min);
+                        systemSum += normalized;
+                    }
+                }
+                maxSum = Math.max(maxSum, systemSum);
+            }
+
+            return { ranges, maxSum };
         }
 
         // Convert 0-1 ratio to green → yellow → red gradient
@@ -1236,11 +1266,12 @@
         }
 
         // Get concentration-based color for a system
-        function getConcentrationColor(system, filters, ranges) {
+        // Uses cumulative sum of normalized values, normalized by maxSum
+        function getConcentrationColor(system, filters, ranges, maxSum) {
             if (selectedContaminantsForHeatmap.size === 0) return '#888';
 
             let totalNormalized = 0;
-            let contaminantsWithData = 0;
+            let hasAnyData = false;
 
             for (const cname of selectedContaminantsForHeatmap) {
                 const range = ranges[cname];
@@ -1260,14 +1291,15 @@
                 if (maxLevel !== null) {
                     const normalized = (maxLevel - range.min) / (range.max - range.min);
                     totalNormalized += normalized;
-                    contaminantsWithData++;
+                    hasAnyData = true;
                 }
             }
 
-            if (contaminantsWithData === 0) return '#888';  // Gray - no data
+            if (!hasAnyData) return '#888';  // Gray - no data
 
-            const avgNormalized = totalNormalized / contaminantsWithData;
-            return ratioToColor(avgNormalized);
+            // Normalize by max sum found across all systems
+            const ratio = maxSum > 0 ? totalNormalized / maxSum : 0;
+            return ratioToColor(ratio);
         }
 
         // Initialize map
@@ -1467,10 +1499,10 @@
         }
 
         // Get marker color based on violations or concentration
-        function getMarkerColor(system, filters, ranges) {
+        function getMarkerColor(system, filters, ranges, maxSum) {
             // If concentration mode and details are loaded, use concentration coloring
             if (colorMode === 'concentration' && detailsLoaded) {
-                return getConcentrationColor(system, filters, ranges);
+                return getConcentrationColor(system, filters, ranges, maxSum);
             }
 
             // Use precomputed status when details aren't loaded
@@ -1505,8 +1537,8 @@
         }
 
         // Create marker for system
-        function createMarker(system, filters, ranges, color) {
-            color = color || getMarkerColor(system, filters, ranges);
+        function createMarker(system, filters, ranges, maxSum, color) {
+            color = color || getMarkerColor(system, filters, ranges, maxSum);
             const radius = Math.min(8, Math.max(4, Math.log10(system.population + 1) * 2));
 
             const marker = L.circleMarker([system.lat, system.lon], {
@@ -1542,8 +1574,11 @@
 
             // Compute concentration ranges if in concentration mode
             let ranges = {};
+            let maxSum = 0;
             if (colorMode === 'concentration' && detailsLoaded) {
-                ranges = computeContaminantRanges(filters);
+                const result = computeContaminantRanges(filters);
+                ranges = result.ranges;
+                maxSum = result.maxSum;
             }
 
             currentMarkers = [];
@@ -1558,9 +1593,9 @@
                     let weight = 0.3;
 
                     if (colorMode === 'concentration' && detailsLoaded && selectedContaminantsForHeatmap.size > 0) {
-                        // Weight by concentration level
+                        // Weight by cumulative concentration (sum of normalized values)
                         let totalNormalized = 0;
-                        let contaminantsWithData = 0;
+                        let hasAnyData = false;
 
                         for (const cname of selectedContaminantsForHeatmap) {
                             const range = ranges[cname];
@@ -1579,12 +1614,12 @@
                             if (maxLevel !== null) {
                                 const normalized = (maxLevel - range.min) / (range.max - range.min);
                                 totalNormalized += normalized;
-                                contaminantsWithData++;
+                                hasAnyData = true;
                             }
                         }
 
-                        if (contaminantsWithData > 0) {
-                            weight = totalNormalized / contaminantsWithData;
+                        if (hasAnyData && maxSum > 0) {
+                            weight = totalNormalized / maxSum;
                         } else {
                             continue; // Skip systems with no data for selected contaminants
                         }
@@ -1604,7 +1639,7 @@
                     heatData.push([system.lat, system.lon, Math.min(weight, 1)]);
                 } else {
                     // Marker mode
-                    const color = getMarkerColor(system, filters, ranges);
+                    const color = getMarkerColor(system, filters, ranges, maxSum);
 
                     // Skip "no data" markers in concentration mode
                     if (colorMode === 'concentration' && color === '#888') {
@@ -1612,7 +1647,7 @@
                     }
 
                     showingCount++;
-                    const marker = createMarker(system, filters, ranges, color);
+                    const marker = createMarker(system, filters, ranges, maxSum, color);
                     markersLayer.addLayer(marker);
                     currentMarkers.push({ marker, system });
                 }
