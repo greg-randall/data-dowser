@@ -15,3 +15,4 @@ test_docs/
 *.md
 !README.md
 *.tmp
+*.csv
