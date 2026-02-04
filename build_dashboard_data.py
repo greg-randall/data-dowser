@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from collections import defaultdict
 
+from functools import lru_cache
 import yaml
 
 
@@ -36,6 +37,7 @@ def normalize_contaminant_name(name):
     return name
 
 
+@lru_cache(maxsize=None)
 def categorize_contaminant(name):
     """Return list of categories a contaminant belongs to."""
     normalized = normalize_contaminant_name(name)
