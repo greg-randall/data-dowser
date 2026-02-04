@@ -15,11 +15,14 @@ def clean_field(text):
 
 
 def main():
+    print("Loading JSON data...")
     # Load dashboard data (already aggregated)
     with open('dashboard_data_map.json') as f:
         map_data = json.load(f)
     with open('dashboard_data_details.json') as f:
         details = json.load(f)
+
+    print(f"Loaded {len(map_data['s'])} map systems and {len(details['d'])} detail records.")
 
     # Build system lookup from map data
     systems = {s['i']: s for s in map_data['s']}
@@ -28,6 +31,7 @@ def main():
     contaminant_meta = details['m']
 
     row_count = 0
+    print("Writing CSV...")
     with open('texas_water_quality.csv', 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -65,3 +69,7 @@ def main():
                     row_count += 1
 
     print(f"Exported {row_count:,} rows to texas_water_quality.csv")
+
+
+if __name__ == "__main__":
+    main()
