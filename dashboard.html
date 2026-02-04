@@ -686,6 +686,26 @@
             color: #fff;
         }
 
+        /* Contaminant Picker */
+        .contaminant-picker { margin-top: 12px; max-height: 300px; overflow-y: auto; }
+        .contaminant-picker.hidden { display: none; }
+        .contaminant-search { width: 100%; padding: 8px; background: #2d2d44; border: 1px solid #444; border-radius: 4px; color: #eee; margin-bottom: 10px; }
+        .category-group { margin-bottom: 8px; }
+        .category-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 8px; background: #2d2d44; border-radius: 4px; font-size: 0.85em; color: #00d4ff; }
+        .category-header .chevron { transition: transform 0.2s; font-size: 0.7em; }
+        .category-header.expanded .chevron { transform: rotate(90deg); }
+        .category-items { padding-left: 20px; display: none; }
+        .category-items.expanded { display: block; }
+        .category-items label { display: block; padding: 3px 0; font-size: 0.85em; }
+        .picker-footer { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #2d2d44; }
+        .picker-btn { padding: 4px 10px; background: #2d2d44; border: 1px solid #444; border-radius: 4px; color: #888; cursor: pointer; font-size: 0.8em; }
+        .picker-btn:hover { color: #00d4ff; border-color: #00d4ff; }
+        #selected-count { font-size: 0.8em; color: #888; margin-left: auto; }
+        .gradient-legend { display: none; }
+        .gradient-legend.active { display: block; }
+        .gradient-bar { height: 12px; border-radius: 6px; background: linear-gradient(to right, #6bcb77, #ffd93d, #ff6b6b); margin-bottom: 6px; }
+        .gradient-labels { display: flex; justify-content: space-between; font-size: 0.75em; color: #888; }
+
         /* Responsive */
         @media (max-width: 768px) {
             .container {
@@ -856,6 +876,24 @@
                     </label>
                 </div>
             </div>
+
+            <div class="filter-section">
+                <h3>Color By</h3>
+                <div class="checkbox-group">
+                    <label><input type="radio" name="color-mode" value="violations" checked> Violation Status</label>
+                    <label><input type="radio" name="color-mode" value="concentration"> Concentration Level</label>
+                </div>
+
+                <div id="contaminant-picker" class="contaminant-picker hidden">
+                    <input type="text" id="contaminant-search" placeholder="Search contaminants..." class="contaminant-search">
+                    <div id="contaminant-categories"></div>
+                    <div class="picker-footer">
+                        <button type="button" class="picker-btn" id="select-all-btn">All</button>
+                        <button type="button" class="picker-btn" id="clear-all-btn">None</button>
+                        <span id="selected-count">0 selected</span>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <main class="map-container">
@@ -866,7 +904,7 @@
                 <p style="margin-top: 10px;">Loading water quality data...</p>
             </div>
 
-            <div class="map-legend">
+            <div class="map-legend" id="violation-legend">
                 <div class="legend-item">
                     <div class="legend-color" style="background: #6bcb77;"></div>
                     <span>No violations</span>
@@ -878,6 +916,20 @@
                 <div class="legend-item">
                     <div class="legend-color" style="background: #ff6b6b;"></div>
                     <span>Recent violations</span>
+                </div>
+            </div>
+
+            <div class="map-legend gradient-legend" id="gradient-legend">
+                <div style="margin-bottom: 8px; font-weight: 600;">Concentration Level</div>
+                <div class="gradient-bar"></div>
+                <div class="gradient-labels">
+                    <span>Low</span>
+                    <span>Mid</span>
+                    <span>High</span>
+                </div>
+                <div class="legend-item" style="margin-top: 8px;">
+                    <div class="legend-color" style="background: #888;"></div>
+                    <span>No data</span>
                 </div>
             </div>
 
@@ -952,6 +1004,8 @@
         let selectedMarker = null;
         let selectedRing = null;
         let selectedContaminant = null;  // For contaminant time-series view
+        let colorMode = 'violations';
+        let selectedContaminantsForHeatmap = new Set();
 
         // Category colors
         const CATEGORY_COLORS = {
@@ -1022,6 +1076,165 @@
             mapD.contaminant_list = detailsD.cl;
             mapD.contaminant_meta = meta;
             return mapD;
+        }
+
+        // Build the contaminant picker UI
+        function buildContaminantPicker() {
+            if (!mapData || !mapData.contaminant_meta) return;
+
+            const container = document.getElementById('contaminant-categories');
+            container.innerHTML = '';
+
+            // Group contaminants by category
+            const categoryGroups = {};
+            for (const [name, meta] of Object.entries(mapData.contaminant_meta)) {
+                const category = meta.ca || 'Other';
+                if (!categoryGroups[category]) {
+                    categoryGroups[category] = [];
+                }
+                categoryGroups[category].push(name);
+            }
+
+            // Sort categories and contaminants within each
+            const sortedCategories = Object.keys(categoryGroups).sort();
+            for (const cat of sortedCategories) {
+                categoryGroups[cat].sort();
+
+                const group = document.createElement('div');
+                group.className = 'category-group';
+
+                const header = document.createElement('div');
+                header.className = 'category-header';
+                header.innerHTML = `<span class="chevron">▶</span> ${cat} (${categoryGroups[cat].length})`;
+                header.onclick = () => {
+                    header.classList.toggle('expanded');
+                    items.classList.toggle('expanded');
+                };
+
+                const items = document.createElement('div');
+                items.className = 'category-items';
+
+                for (const contaminantName of categoryGroups[cat]) {
+                    const label = document.createElement('label');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = contaminantName;
+                    checkbox.dataset.category = cat;
+                    checkbox.onchange = () => {
+                        if (checkbox.checked) {
+                            selectedContaminantsForHeatmap.add(contaminantName);
+                        } else {
+                            selectedContaminantsForHeatmap.delete(contaminantName);
+                        }
+                        updateSelectedCount();
+                        renderMap();
+                    };
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(' ' + contaminantName));
+                    items.appendChild(label);
+                }
+
+                group.appendChild(header);
+                group.appendChild(items);
+                container.appendChild(group);
+            }
+
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selected-count').textContent =
+                selectedContaminantsForHeatmap.size + ' selected';
+        }
+
+        // Compute min/max ranges for selected contaminants across visible systems
+        function computeContaminantRanges(filters) {
+            const ranges = {};
+            if (selectedContaminantsForHeatmap.size === 0) return ranges;
+
+            for (const cname of selectedContaminantsForHeatmap) {
+                let min = Infinity;
+                let max = -Infinity;
+
+                for (const system of mapData.systems) {
+                    if (!systemMatchesFilters(system, filters)) continue;
+
+                    for (const [year, yearData] of Object.entries(system.years || {})) {
+                        const y = parseInt(year);
+                        if (y < filters.yearMin || y > filters.yearMax) continue;
+
+                        const c = yearData.contaminants?.[cname];
+                        if (c?.level != null) {
+                            min = Math.min(min, c.level);
+                            max = Math.max(max, c.level);
+                        }
+                    }
+                }
+
+                if (min !== Infinity && max !== -Infinity) {
+                    ranges[cname] = { min, max };
+                }
+            }
+
+            return ranges;
+        }
+
+        // Convert 0-1 ratio to green → yellow → red gradient
+        function ratioToColor(ratio) {
+            // Clamp to 0-1
+            ratio = Math.max(0, Math.min(1, ratio));
+
+            let r, g, b;
+            if (ratio < 0.5) {
+                // Green (#6bcb77) to Yellow (#ffd93d)
+                const t = ratio * 2;
+                r = Math.round(107 + (255 - 107) * t);
+                g = Math.round(203 + (217 - 203) * t);
+                b = Math.round(119 + (61 - 119) * t);
+            } else {
+                // Yellow (#ffd93d) to Red (#ff6b6b)
+                const t = (ratio - 0.5) * 2;
+                r = 255;
+                g = Math.round(217 + (107 - 217) * t);
+                b = Math.round(61 + (107 - 61) * t);
+            }
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // Get concentration-based color for a system
+        function getConcentrationColor(system, filters, ranges) {
+            if (selectedContaminantsForHeatmap.size === 0) return '#888';
+
+            let totalNormalized = 0;
+            let contaminantsWithData = 0;
+
+            for (const cname of selectedContaminantsForHeatmap) {
+                const range = ranges[cname];
+                if (!range || range.max === range.min) continue;
+
+                // Find max level for this contaminant in this system (within year range)
+                let maxLevel = null;
+                for (const [year, yearData] of Object.entries(system.years || {})) {
+                    const y = parseInt(year);
+                    if (y < filters.yearMin || y > filters.yearMax) continue;
+                    const c = yearData.contaminants?.[cname];
+                    if (c?.level != null) {
+                        maxLevel = maxLevel === null ? c.level : Math.max(maxLevel, c.level);
+                    }
+                }
+
+                if (maxLevel !== null) {
+                    const normalized = (maxLevel - range.min) / (range.max - range.min);
+                    totalNormalized += normalized;
+                    contaminantsWithData++;
+                }
+            }
+
+            if (contaminantsWithData === 0) return '#888';  // Gray - no data
+
+            const avgNormalized = totalNormalized / contaminantsWithData;
+            return ratioToColor(avgNormalized);
         }
 
         // Initialize map
@@ -1098,6 +1311,9 @@
 
                 detailsLoaded = true;
                 detailsLoading = false;
+
+                // Build the contaminant picker now that we have the data
+                buildContaminantPicker();
 
                 // If info panel is open and waiting for details, refresh it
                 if (selectedSystem) {
@@ -1217,8 +1433,13 @@
             return hasMatchingYear || Object.keys(system.years || {}).length === 0;
         }
 
-        // Get marker color based on violations
-        function getMarkerColor(system, filters) {
+        // Get marker color based on violations or concentration
+        function getMarkerColor(system, filters, ranges) {
+            // If concentration mode and details are loaded, use concentration coloring
+            if (colorMode === 'concentration' && detailsLoaded) {
+                return getConcentrationColor(system, filters, ranges);
+            }
+
             // Use precomputed status when details aren't loaded
             if (!detailsLoaded) {
                 // violationStatus: 0=none, 1=old, 2=recent
@@ -1251,8 +1472,8 @@
         }
 
         // Create marker for system
-        function createMarker(system, filters) {
-            const color = getMarkerColor(system, filters);
+        function createMarker(system, filters, ranges) {
+            const color = getMarkerColor(system, filters, ranges);
             const radius = Math.min(8, Math.max(4, Math.log10(system.population + 1) * 2));
 
             const marker = L.circleMarker([system.lat, system.lon], {
@@ -1286,6 +1507,12 @@
                 heatLayer = null;
             }
 
+            // Compute concentration ranges if in concentration mode
+            let ranges = {};
+            if (colorMode === 'concentration' && detailsLoaded) {
+                ranges = computeContaminantRanges(filters);
+            }
+
             currentMarkers = [];
             let showingCount = 0;
 
@@ -1310,7 +1537,7 @@
                     }
                     heatData.push([system.lat, system.lon, Math.min(weight, 1)]);
                 } else {
-                    const marker = createMarker(system, filters);
+                    const marker = createMarker(system, filters, ranges);
                     markersLayer.addLayer(marker);
                     currentMarkers.push({ marker, system });
                 }
@@ -1807,10 +2034,29 @@
                 const categories = ['oil_gas', 'radioactive', 'agricultural', 'heavy_metals', 'disinfection_byproducts'];
 
                 if (filter === 'all') {
+                    // Reset category checkboxes
                     categories.forEach(cat => {
                         document.getElementById(`filter-${cat}`).checked = true;
                     });
                     document.getElementById('violations-only').checked = false;
+
+                    // Reset year range to full range
+                    const yearMin = document.getElementById('year-min');
+                    const yearMax = document.getElementById('year-max');
+                    yearMin.value = yearMin.min;
+                    yearMax.value = yearMax.max;
+                    document.getElementById('year-min-val').textContent = yearMin.min;
+                    document.getElementById('year-max-val').textContent = yearMax.max;
+                    updateYearRangeFill();
+
+                    // Reset population range
+                    const popMin = document.getElementById('population-min');
+                    const popMax = document.getElementById('population-max');
+                    popMin.value = popMin.min;
+                    popMax.value = popMax.max;
+                    document.getElementById('pop-min-val').textContent = formatPop(popMin.min);
+                    document.getElementById('pop-max-val').textContent = formatPop(popMax.max);
+                    updatePopRangeFill();
                 } else if (filter === 'arsenic') {
                     categories.forEach(cat => {
                         document.getElementById(`filter-${cat}`).checked = cat === 'heavy_metals';
@@ -1920,6 +2166,77 @@
         // Map mode radio buttons
         document.querySelectorAll('input[name="map-mode"]').forEach(input => {
             input.addEventListener('change', renderMap);
+        });
+
+        // Color mode radio buttons
+        document.querySelectorAll('input[name="color-mode"]').forEach(input => {
+            input.addEventListener('change', (e) => {
+                colorMode = e.target.value;
+                const picker = document.getElementById('contaminant-picker');
+                const violationLegend = document.getElementById('violation-legend');
+                const gradientLegend = document.getElementById('gradient-legend');
+
+                if (colorMode === 'concentration') {
+                    picker.classList.remove('hidden');
+                    violationLegend.style.display = 'none';
+                    gradientLegend.classList.add('active');
+                } else {
+                    picker.classList.add('hidden');
+                    violationLegend.style.display = 'block';
+                    gradientLegend.classList.remove('active');
+                }
+
+                renderMap();
+            });
+        });
+
+        // Contaminant search filter
+        document.getElementById('contaminant-search').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const labels = document.querySelectorAll('#contaminant-categories .category-items label');
+
+            labels.forEach(label => {
+                const text = label.textContent.toLowerCase();
+                label.style.display = text.includes(query) ? 'block' : 'none';
+            });
+
+            // Auto-expand categories that have matching items
+            document.querySelectorAll('#contaminant-categories .category-group').forEach(group => {
+                const items = group.querySelector('.category-items');
+                const header = group.querySelector('.category-header');
+                const visibleItems = items.querySelectorAll('label[style="display: block;"], label:not([style])');
+                const hasVisible = Array.from(items.querySelectorAll('label')).some(l => l.style.display !== 'none');
+
+                if (query && hasVisible) {
+                    header.classList.add('expanded');
+                    items.classList.add('expanded');
+                }
+            });
+        });
+
+        // Select All button
+        document.getElementById('select-all-btn').addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#contaminant-categories input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                // Only select visible checkboxes
+                if (cb.closest('label').style.display !== 'none') {
+                    cb.checked = true;
+                    selectedContaminantsForHeatmap.add(cb.value);
+                }
+            });
+            updateSelectedCount();
+            renderMap();
+        });
+
+        // Clear All button
+        document.getElementById('clear-all-btn').addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#contaminant-categories input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+            });
+            selectedContaminantsForHeatmap.clear();
+            updateSelectedCount();
+            renderMap();
         });
 
         // Welcome modal
