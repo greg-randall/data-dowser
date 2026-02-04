@@ -90,12 +90,7 @@ def main():
             with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zf:
                 zf.write(csv_filename, arcname=csv_filename)
             
-            # Verify zip creation before deleting source
-            if os.path.exists(zip_filename):
-                os.remove(csv_filename)
-                print(f"Compression complete. Raw CSV removed.")
-            else:
-                print("Error: Zip file creation failed.")
+            print(f"Compression complete. Both {csv_filename} and {zip_filename} are available.")
         except Exception as e:
             print(f"Compression failed: {e}")
 
