@@ -1,6 +1,9 @@
 import json
 import csv
 import re
+import argparse
+import zipfile
+import os
 from pathlib import Path
 
 
@@ -15,12 +18,20 @@ def clean_field(text):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Export water quality data to CSV/ZIP.")
+    parser.add_argument("--no-compress", action="store_true", help="Do not compress the output CSV")
+    args = parser.parse_args()
+
     print("Loading JSON data...")
     # Load dashboard data (already aggregated)
-    with open('dashboard_data_map.json') as f:
-        map_data = json.load(f)
-    with open('dashboard_data_details.json') as f:
-        details = json.load(f)
+    try:
+        with open('dashboard_data_map.json') as f:
+            map_data = json.load(f)
+        with open('dashboard_data_details.json') as f:
+            details = json.load(f)
+    except FileNotFoundError:
+        print("Error: Dashboard data files not found. Run build_dashboard_data.py first.")
+        return
 
     print(f"Loaded {len(map_data['s'])} map systems and {len(details['d'])} detail records.")
 
@@ -30,9 +41,11 @@ def main():
     # Get contaminant metadata
     contaminant_meta = details['m']
 
+    csv_filename = 'texas_water_quality.csv'
     row_count = 0
+    
     print("Writing CSV...")
-    with open('texas_water_quality.csv', 'w', newline='', encoding='utf-8') as f:
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
             'system_id', 'system_name', 'county', 'latitude', 'longitude',
@@ -68,7 +81,23 @@ def main():
                     ])
                     row_count += 1
 
-    print(f"Exported {row_count:,} rows to texas_water_quality.csv")
+    print(f"Exported {row_count:,} rows to {csv_filename}")
+
+    if not args.no_compress:
+        zip_filename = csv_filename + '.zip'
+        print(f"Compressing to {zip_filename}...")
+        try:
+            with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.write(csv_filename, arcname=csv_filename)
+            
+            # Verify zip creation before deleting source
+            if os.path.exists(zip_filename):
+                os.remove(csv_filename)
+                print(f"Compression complete. Raw CSV removed.")
+            else:
+                print("Error: Zip file creation failed.")
+        except Exception as e:
+            print(f"Compression failed: {e}")
 
 
 if __name__ == "__main__":
