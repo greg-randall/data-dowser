@@ -11,8 +11,11 @@ test_docs/
 *.log
 *.json
 *.7z
+*.zip
+!texas_water_quality.csv.zip
 *.gz
 *.md
 !README.md
 *.tmp
 *.csv
+!texas_water_quality.csv

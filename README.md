@@ -25,6 +25,31 @@ This configuration file maps specific chemical names (e.g., "Trihalomethanes", "
 ### 5. Visualization (`build_dashboard_data.py` & `dashboard.html`)
 This script merges the chemical data, location metadata, and category configuration. It splits the output into two optimized files (`dashboard_data_map.json` and `dashboard_data_details.json`) to allow the dashboard to load the map instantly while fetching details in the background.
 
+### 6. Export (`export_csv.py`)
+This script flattens the nested JSON data into a single CSV file for easier analysis in tools like Excel, Pandas, or Tableau. It generates `texas_water_quality.csv` and a compressed version `texas_water_quality.csv.zip`.
+
+## Dataset
+
+For users who want to analyze the data without running the full pipeline, the processed dataset is included in this repository:
+
+*   **`texas_water_quality.csv`**: A flat CSV containing 600,000+ rows of water quality test results.
+*   **`texas_water_quality.csv.zip`**: A compressed version of the CSV for easier downloading.
+
+**CSV Columns:**
+*   `system_id`: TCEQ Water System ID (e.g., TX0010001)
+*   `system_name`: Name of the water system
+*   `county`: Primary county served
+*   `latitude`/`longitude`: Physical coordinates of the system
+*   `population`: Estimated population served
+*   `year`: Reporting year of the data
+*   `water_source`: Type of water (Groundwater, Surface Water, etc.)
+*   `contaminant`: Name of the chemical or contaminant
+*   `category`: Broad classification (e.g., Heavy Metals, Disinfection Byproducts)
+*   `highest_level`: The detected level reported to TCEQ
+*   `mcl`: Maximum Contaminant Level (regulatory limit)
+*   `units`: Measurement units (ppm, ppb, pCi/L, etc.)
+*   `violation`: Boolean indicating if the level exceeded the MCL
+
 ## Technical Implementation
 
 ### Scraper
@@ -61,6 +86,9 @@ python get-ids.py
 # 4. Compile the dashboard data (Uses contaminant_categories.yaml)
 python build_dashboard_data.py
 
-# 5. View the dashboard
+# 5. Export to CSV
+python export_csv.py
+
+# 6. View the dashboard
 # Open dashboard.html in any modern browser
 ```
