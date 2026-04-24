@@ -28,6 +28,18 @@ This script merges the chemical data, location metadata, and category configurat
 ### 6. Export (`export_csv.py`)
 This script flattens the nested JSON data into a single CSV file for easier analysis in tools like Excel, Pandas, or Tableau. It generates `texas_water_quality.csv` and a compressed version `texas_water_quality.csv.zip`.
 
+### 7. Leaderboard (`build_leaderboard.py` & `leaderboard.html`)
+This script aggregates the flat CSV into a worst-to-best ranking of water systems. For each system it computes:
+*   **`violation_count`**: number of rows where the contaminant level exceeded the MCL.
+*   **`severity_sum`**: sum of `highest_level / mcl` across all violations. One reading at 100× the limit outweighs fifty at 1.1×.
+*   **`avg_severity`**: average exceedance per violation.
+*   **`impact_score`**: `population × severity_sum` — total human exposure (null when population is unknown).
+*   **`composite_score`**: `0.7 × log-norm(severity) + 0.3 × log-norm(impact)` — a balanced "bad and affects people" score, log-scaled so a single extreme reading doesn't dominate the ranking. Weights are configurable in `build_leaderboard.py`.
+
+Output is `leaderboard.json` and a standalone `leaderboard.html` with a sortable, filterable table. Serve the page with `python3 -m http.server` and open it alongside the main dashboard.
+
+Optional flags: `--min-year YYYY` and `--max-year YYYY` limit the ranking to a specific reporting-year window (e.g., `--min-year 2020 --max-year 2024` for recent data only). Rows outside the range are counted in `rows_skipped_by_year_filter` in the output meta block.
+
 ## Dataset
 
 For users who want to analyze the data without running the full pipeline, the processed dataset is included in this repository:
@@ -49,6 +61,18 @@ For users who want to analyze the data without running the full pipeline, the pr
 *   `mcl`: Maximum Contaminant Level (regulatory limit)
 *   `units`: Measurement units (ppm, ppb, pCi/L, etc.)
 *   `violation`: Boolean indicating if the level exceeded the MCL
+
+## Contaminant Categories
+
+The dashboard groups hundreds of specific chemicals into user-friendly categories defined in `contaminant_categories.yaml`:
+
+*   **Agricultural:** Fertilizers (Nitrates) and pesticides (Atrazine, Glyphosate, etc.)
+*   **Heavy Metals:** Arsenic, Lead, Mercury, Chromium, etc.
+*   **Oil & Gas:** Benzene, Toluene, Xylenes (BTEX), and other petrochemical indicators.
+*   **Radioactive:** Radium, Uranium, and Alpha/Beta particles.
+*   **Disinfection Byproducts:** Chemicals formed when chlorine reacts with organic matter (TTHM, HAA5).
+*   **Industrial Solvents:** Degreasers and manufacturing chemicals (TCE, PCE, Vinyl Chloride).
+*   **Plasticizers:** Chemicals used in plastics manufacturing (Phthalates).
 
 ## Technical Implementation
 
@@ -89,6 +113,18 @@ python build_dashboard_data.py
 # 5. Export to CSV
 python export_csv.py
 
-# 6. View the dashboard
-# Open dashboard.html in any modern browser
+# 6. Build the leaderboard
+python build_leaderboard.py
+
+# 7. View the dashboard and leaderboard
+python -m http.server 8000
+# Then open http://localhost:8000/dashboard.html or /leaderboard.html
 ```
+
+## License
+
+LGPL v2.1
+
+## Disclaimer
+
+This is an independent project and is not affiliated with, endorsed by, or connected to the Texas Commission on Environmental Quality (TCEQ). Data is provided for informational purposes only and should be verified against official state records.

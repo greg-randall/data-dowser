@@ -11,6 +11,8 @@ import re
 import sys
 from pathlib import Path
 
+from data_patches import apply_patch
+
 CSV_PATH = Path("raw-data/texas_water_quality.csv")
 OUT_PATH = Path("leaderboard.json")
 
@@ -43,7 +45,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", default=str(CSV_PATH), help="Path to flat CSV")
     parser.add_argument("--out", default=str(OUT_PATH), help="Output JSON path")
+    parser.add_argument("--min-year", type=int, default=None,
+                        help="Inclusive lower bound on reporting year")
+    parser.add_argument("--max-year", type=int, default=None,
+                        help="Inclusive upper bound on reporting year")
     args = parser.parse_args()
+
+    if args.min_year is not None and args.max_year is not None and args.min_year > args.max_year:
+        print(f"ERROR: --min-year ({args.min_year}) > --max-year ({args.max_year})", file=sys.stderr)
+        sys.exit(1)
 
     csv_path = Path(args.csv)
     if not csv_path.exists():
@@ -53,11 +63,31 @@ def main():
     systems = {}
     total_rows = 0
     total_violations = 0
+    rows_skipped_by_year = 0
 
     print(f"Reading {csv_path}...")
+    if args.min_year is not None or args.max_year is not None:
+        lo = args.min_year if args.min_year is not None else "-inf"
+        hi = args.max_year if args.max_year is not None else "+inf"
+        print(f"Year filter: [{lo}, {hi}]")
     with csv_path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            if args.min_year is not None or args.max_year is not None:
+                year_raw = row.get("year")
+                try:
+                    year = int(year_raw) if year_raw else None
+                except ValueError:
+                    year = None
+                if year is None:
+                    rows_skipped_by_year += 1
+                    continue
+                if args.min_year is not None and year < args.min_year:
+                    rows_skipped_by_year += 1
+                    continue
+                if args.max_year is not None and year > args.max_year:
+                    rows_skipped_by_year += 1
+                    continue
             total_rows += 1
             sid = row["system_id"]
             if sid not in systems:
@@ -68,14 +98,20 @@ def main():
                     "county": row["county"],
                     "latitude": to_float(row["latitude"]),
                     "longitude": to_float(row["longitude"]),
+                    "coord_source": None,
                     "population": to_float(row["population"]),
                     "violation_count": 0,
                     "severity_sum": 0.0,
                     "violations_missing_mcl": 0,
                     "worst_violation": None,
                     "worst_severity": 0.0,
+                    "active_years": set(),
                 }
             s = systems[sid]
+
+            year_raw = row.get("year")
+            if year_raw:
+                s["active_years"].add(year_raw)
 
             pop = to_float(row["population"])
             if pop is not None and (s["population"] is None or pop > s["population"]):
@@ -84,10 +120,14 @@ def main():
             if row["violation"] != "True":
                 continue
 
+            level = to_float(row["highest_level"])
+            level, dropped = apply_patch(sid, row.get("year"), row.get("contaminant"), level)
+            if dropped:
+                continue
+
             total_violations += 1
             s["violation_count"] += 1
 
-            level = to_float(row["highest_level"])
             mcl = to_float(row["mcl"])
             if level is None or mcl is None or mcl <= 0:
                 s["violations_missing_mcl"] += 1
@@ -106,15 +146,39 @@ def main():
                     "severity": severity,
                 }
 
+    # Merge supplementary coordinates for systems without them in the CSV.
+    # geocoded_coordinates.json is produced by geocode_missing.py.
+    geocoded_path = Path("geocoded_coordinates.json")
+    geocoded_count = 0
+    if geocoded_path.exists():
+        geocoded = json.load(geocoded_path.open())
+        for sid, coords in geocoded.items():
+            if sid in systems and systems[sid]["latitude"] is None:
+                systems[sid]["latitude"] = coords["lat"]
+                systems[sid]["longitude"] = coords["lon"]
+                systems[sid]["coord_source"] = coords.get("source")
+                geocoded_count += 1
+        print(f"Merged {geocoded_count} geocoded coordinates from {geocoded_path}")
+
     for s in systems.values():
         scored = s["violation_count"] - s["violations_missing_mcl"]
         s["avg_severity"] = (s["severity_sum"] / scored) if scored > 0 else None
+        
+        # Years this system has been reporting
+        y_count = len(s["active_years"])
+        s["active_years_count"] = y_count
+        s["annual_severity"] = (s["severity_sum"] / y_count) if y_count > 0 else 0
+        # Clean up the set before JSON export
+        s.pop("active_years", None)
+
         s["impact_score"] = (
             s["population"] * s["severity_sum"]
             if s["population"] and s["severity_sum"] > 0
             else None
         )
 
+    # Log-normalized composite score. Log tames the right-skew (e.g. a single
+    # data-error reading with severity=4500 doesn't crush everyone else to ~0).
     # Log-normalized composite score. Log tames the right-skew (e.g. a single
     # data-error reading with severity=4500 doesn't crush everyone else to ~0).
     # composite_score is null when population is missing — honest about coverage
@@ -149,9 +213,9 @@ def main():
     ranked = sorted(
         systems.values(),
         key=lambda s: (
+            -(s["composite_score"] if s["composite_score"] is not None else (SEVERITY_WEIGHT * s["severity_norm"])),
             -s["severity_sum"],
             -s["violation_count"],
-            -(s["avg_severity"] or 0),
         ),
     )
     for i, s in enumerate(ranked, 1):
@@ -165,12 +229,15 @@ def main():
     out = {
         "meta": {
             "source_csv": str(csv_path),
+            "min_year": args.min_year,
+            "max_year": args.max_year,
+            "rows_skipped_by_year_filter": rows_skipped_by_year,
             "total_rows": total_rows,
             "total_violations": total_violations,
             "systems_total": len(ranked),
             "systems_with_violations": systems_with_violations,
             "systems_with_missing_mcl_violations": systems_with_missing_mcl,
-            "sort": "severity_sum DESC, violation_count DESC, avg_severity DESC",
+            "sort": "composite_score DESC (fallback to severity_norm), severity_sum DESC",
             "severity_formula": "highest_level / mcl per violation row",
             "impact_formula": "population * severity_sum (null if population missing)",
             "composite_formula": (
@@ -186,6 +253,8 @@ def main():
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(out, f, indent=2, default=str)
 
+    if rows_skipped_by_year:
+        print(f"Skipped {rows_skipped_by_year:,} rows outside year filter")
     print(f"Read {total_rows:,} rows, {total_violations:,} violations")
     print(f"Systems: {len(ranked):,} total, "
           f"{systems_with_violations:,} with >=1 violation, "

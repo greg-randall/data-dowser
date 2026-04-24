@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Texas Water Quality Leaderboard</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="leaderboard">
+<header>
+    <h1>Texas Water Quality Leaderboard</h1>
+    <div class="sub">
+        Ranked worst → best by total violation severity.
+        <button class="explain-trigger" id="explainBtn">How is this ranked?</button>
+        <div style="margin-top: 8px;">See the <a href="index.html">map dashboard</a>.</div>
+    </div>
+</header>
+
+<div class="popover-overlay" id="popoverOverlay">
+    <div class="popover-content">
+        <button class="popover-close" id="popoverClose">&times;</button>
+        <h2>How is this ranked?</h2>
+        
+        <div class="popover-section">
+            <p>
+                This list ranks every public water system in Texas from worst to best based on the severity of drinking-water violations.
+            </p>
+        </div>
+
+        <div class="popover-section">
+            <h3>Severity Score</h3>
+            <p>
+                For every violation, we take how much contaminant showed up and divide it by the legal limit, then add them together.
+            </p>
+            <p style="margin-top: 10px;">
+                In the case of Silver Creek in 2014 they had 345 units of Radium where the limit is 5, so that one test alone gives them a severity of 69x (345/5=69). That then gets added to a bunch of other violations to get them to 360.21.
+            </p>
+            <p style="margin-top: 10px;">
+                Since some systems have been around for 15 years and others only 2, we also show <b>Annual Score</b>. 
+                This is the total severity divided by the number of years the system has been active, 
+                giving you a better sense of their yearly track record.
+            </p>
+        </div>
+
+        <div class="popover-section">
+            <h3>Impact</h3>
+            <p>
+                <b>Impact</b> is the score that asks how bad is this at a population level. It multiplies Severity by the population the system serves.
+            </p>
+            <p style="margin-top: 10px;">
+                A tiny town with god-awful violations can actually score lower on Impact than a bigger place with milder problems—because 
+                fewer people are exposed. It’s what keeps the small-town nightmares from getting lost in the shuffle.
+            </p>
+        </div>
+
+        <div class="popover-section">
+            <h3>The Composite Score</h3>
+            <p>
+                The <b>Composite Score</b> blends Severity and Impact into one number.
+            </p>
+            <p style="margin-top: 10px;">
+                To keep extreme outliers from dominating the rankings, both values are scaled before being combined. 
+                The final score is weighted 70% toward Severity and 30% toward Impact. It’s a single metric 
+                designed to highlight which systems have the most serious, real-world water problems right now.
+                <br><br>
+                <i>* Systems with an <b>Unknown</b> population are ranked based on their Severity Score only.</i>
+            </p>
+        </div>
+
+        <div class="popover-section">
+            <h3>A Note on the Data</h3>
+            <p>
+                We only fixed one obvious typo from 2016 in Fayette County that was 4,500&times; higher than everything else that year. 
+                Everything else is straight from the state reports.
+            </p>
+        </div>
+
+        <div class="welcome-footer" style="padding: 16px 0 0 0; border-top: 1px solid #3A2518; margin-top: 20px;">
+            <label>
+                <input type="checkbox" id="popoverDontShow">
+                Don't show this again
+            </label>
+            <button class="welcome-btn" id="popoverGotIt">Got it</button>
+        </div>
+    </div>
+</div>
+
+<div class="outlier-warn" id="outlierWarn" hidden>
+    Note: some top entries are driven by a single extreme reading likely caused by a data-entry error
+    in the upstream TCEQ document. The "worst violation" column shows each system's peak so outliers
+    are easy to spot.
+</div>
+
+<div class="controls">
+    <input type="text" id="search" placeholder="Search by system, city, or county…" autofocus>
+    <label><input type="checkbox" id="hideZero" checked> Hide systems with 0 violations</label>
+    <div class="stats" id="stats"></div>
+</div>
+
+<table id="t">
+    <thead>
+        <tr>
+            <th data-key="system_id" title="TCEQ Public Water System (PWS) Identifier">System ID</th>
+            <th data-key="system_name" title="Official name of the water system">Name</th>
+            <th data-key="city" title="Primary city served by this system">City</th>
+            <th data-key="county" title="County where the system is located">County</th>
+            <th data-key="population" class="num" title="Total population served by this system">Pop.</th>
+            <th data-key="active_years_count" class="num" title="Number of years (out of 15) this system has reported data">Years</th>
+            <th data-key="violation_count" class="num" title="Total number of health-based violations reported since 2010">Violations</th>
+            <th data-key="severity_sum" class="num" title="Total Toxicity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity Score</th>
+            <th data-key="annual_severity" class="num" title="Average yearly toxicity: total severity divided by years active.">Annual Score</th>
+            <th data-key="avg_severity" class="num" title="The average intensity of each violation.">Avg Viol.</th>
+            <th data-key="composite_score" class="num" title="A balanced ranking metric: 70% Severity Score, 30% Population Impact">Composite</th>
+            <th data-key="_worst_sev" class="num" title="The single most toxic test result recorded: how many times the legal limit it reached.">Worst</th>
+            <th data-key="_worst_c" title="The contaminant responsible for this system's peak severity reading">Worst Contaminant</th>
+        </tr>
+    </thead>
+    <tbody id="tb"></tbody>
+</table>
+<div class="empty" id="empty" hidden>No systems match the current filter.</div>
+
+<script>
+let ALL = [];
+let FILTERED = [];
+let sortKey = "composite_score";
+let sortDir = -1; // 1 asc, -1 desc
+
+const tb = document.getElementById("tb");
+const empty = document.getElementById("empty");
+const stats = document.getElementById("stats");
+const search = document.getElementById("search");
+const hideZero = document.getElementById("hideZero");
+const outlierWarn = document.getElementById("outlierWarn");
+const explainBtn = document.getElementById("explainBtn");
+const popoverOverlay = document.getElementById("popoverOverlay");
+const popoverClose = document.getElementById("popoverClose");
+const popoverGotIt = document.getElementById("popoverGotIt");
+const popoverDontShow = document.getElementById("popoverDontShow");
+
+function closePopover() {
+    if (popoverDontShow.checked) {
+        localStorage.setItem("hideLeaderboardExplain", "true");
+    }
+    popoverOverlay.classList.remove("active");
+}
+
+explainBtn.onclick = () => popoverOverlay.classList.add("active");
+popoverClose.onclick = closePopover;
+popoverGotIt.onclick = closePopover;
+popoverOverlay.onclick = (e) => { if (e.target === popoverOverlay) closePopover(); };
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopover(); });
+
+// Show on load if not dismissed
+if (localStorage.getItem("hideLeaderboardExplain") !== "true") {
+    popoverOverlay.classList.add("active");
+}
+
+function fmt(n, digits = 2) {
+    if (n === null || n === undefined) return "—";
+    if (typeof n !== "number") return n;
+    if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return n.toFixed(digits);
+}
+function fmtPop(n) {
+    if (n === null || n === undefined) return '<span class="unknown-pop" title="TCEQ has no population data for this system. Impact cannot be calculated.">Unknown</span>';
+    return Math.round(n).toLocaleString();
+}
+
+function worstSev(s) { return s.worst_violation ? s.worst_violation.severity : 0; }
+function worstC(s) { return s.worst_violation ? s.worst_violation.contaminant : ""; }
+
+function compare(a, b, key) {
+    let va, vb;
+    if (key === "_worst_sev") { va = worstSev(a); vb = worstSev(b); }
+    else if (key === "_worst_c") { va = worstC(a); vb = worstC(b); }
+    else { va = a[key]; vb = b[key]; }
+    if (va === null || va === undefined) va = sortDir === 1 ? Infinity : -Infinity;
+    if (vb === null || vb === undefined) vb = sortDir === 1 ? Infinity : -Infinity;
+    if (typeof va === "string" || typeof vb === "string") {
+        return String(va).localeCompare(String(vb)) * sortDir;
+    }
+    return (va - vb) * sortDir;
+}
+
+function applyFilter() {
+    const q = search.value.trim().toLowerCase();
+    const words = q.split(/\s+/).filter(w => w.length > 0);
+    const hide0 = hideZero.checked;
+    FILTERED = ALL.filter(s => {
+        if (hide0 && s.violation_count === 0) return false;
+        if (words.length === 0) return true;
+        const haystack = [
+            s.system_id,
+            s.system_name,
+            s.city,
+            s.county
+        ].join(" ").toLowerCase();
+        return words.every(w => haystack.includes(w));
+    });
+    render();
+}
+
+function render() {
+    FILTERED.sort((a, b) => compare(a, b, sortKey));
+    tb.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    for (const s of FILTERED) {
+        const tr = document.createElement("tr");
+        const w = s.worst_violation;
+        const sevClass = s.severity_sum >= 10 ? "severity-high" : "";
+        const worstCellSev = w ? `${fmt(w.severity, 1)}x` : "—";
+        const worstCellC = w ? `${w.contaminant}<div class="worst">${w.year ?? ""} · ${fmt(w.level)} ${w.units} / MCL ${fmt(w.mcl)}</div>` : "—";
+        const sidEnc = encodeURIComponent(s.system_id);
+        const yearParam = w && w.year ? `&year=${w.year}` : "";
+        const nameEsc = (s.system_name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const hasCoords = s.latitude !== null && s.longitude !== null;
+        const sidCell = hasCoords
+            ? `<a class="sid-link" href="index.html?system=${sidEnc}${yearParam}" title="Open ${s.system_id} on the map">${s.system_id}</a>`
+            : `<span class="no-map" title="No coordinates — this system has no map marker">${s.system_id}</span>`;
+        const nameCell = hasCoords
+            ? `<a class="name-link" href="index.html?system=${sidEnc}${yearParam}">${nameEsc}</a>`
+            : `<span class="no-map">${nameEsc}</span><span class="no-map-tag" title="TCEQ has no coordinates for this system">no map</span>`;
+        const compScoreCell = s.composite_score !== null 
+            ? fmt(s.composite_score, 3) 
+            : `<span class="no-impact" title="Unknown population — ranked by Severity Score only">${fmt(0.7 * s.severity_norm, 3)}*</span>`;
+
+        tr.innerHTML = `
+            <td class="sid">${sidCell}</td>
+            <td>${nameCell}</td>
+            <td>${s.city || ""}</td>
+            <td>${s.county || ""}</td>
+            <td class="num">${fmtPop(s.population)}</td>
+            <td class="num">${s.active_years_count || 0}</td>
+            <td class="num">${s.violation_count}</td>
+            <td class="num ${sevClass}">${fmt(s.severity_sum)}</td>
+            <td class="num">${fmt(s.annual_severity)}</td>
+            <td class="num">${fmt(s.avg_severity)}</td>
+            <td class="num">${compScoreCell}</td>
+            <td class="num">${worstCellSev}</td>
+            <td>${worstCellC}</td>
+        `;
+        frag.appendChild(tr);
+    }
+    tb.appendChild(frag);
+    empty.hidden = FILTERED.length > 0;
+    stats.innerHTML = `<span>${FILTERED.length.toLocaleString()}</span> / ${ALL.length.toLocaleString()} systems`;
+
+    for (const th of document.querySelectorAll("thead th")) {
+        th.classList.remove("sorted-asc", "sorted-desc");
+        if (th.dataset.key === sortKey) {
+            th.classList.add(sortDir === 1 ? "sorted-asc" : "sorted-desc");
+        }
+    }
+}
+
+document.querySelectorAll("thead th").forEach(th => {
+    th.addEventListener("click", () => {
+        const key = th.dataset.key;
+        if (sortKey === key) sortDir = -sortDir;
+        else {
+            sortKey = key;
+            sortDir = ["system_id", "system_name", "city", "county", "_worst_c"].includes(key) ? 1 : -1;
+            if (key === "rank") sortDir = 1;
+        }
+        render();
+    });
+});
+search.addEventListener("input", applyFilter);
+hideZero.addEventListener("change", applyFilter);
+
+fetch("leaderboard.json")
+    .then(r => r.json())
+    .then(data => {
+        ALL = data.systems;
+        // default: sort by rank asc (worst first since rank=1 is worst)
+        sortKey = "rank";
+        sortDir = 1;
+        if (ALL.some(s => s.worst_violation && s.worst_violation.severity > 500)) {
+            outlierWarn.hidden = false;
+        }
+        applyFilter();
+    })
+    .catch(err => {
+        tb.innerHTML = `<tr><td colspan="13" class="empty">Failed to load leaderboard.json. Serve this page via <code>python3 -m http.server</code>.<br>${err}</td></tr>`;
+    });
+</script>
+</body>
+</html>

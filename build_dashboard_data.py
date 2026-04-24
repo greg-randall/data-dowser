@@ -13,6 +13,8 @@ from collections import defaultdict
 from functools import lru_cache
 import yaml
 
+from data_patches import apply_patch
+
 
 def load_contaminant_categories():
     """Load contaminant categories from YAML file."""
@@ -150,8 +152,13 @@ def load_contaminant_data(downloads_dir, limit=None):
                         # Clean up the name
                         clean_name = re.sub(r'\s+', ' ', name).strip()
 
+                        level = c.get("highest_level")
+                        level, dropped = apply_patch(system_id, year, clean_name, level)
+                        if dropped:
+                            continue
+
                         # Store only level per instance (normalized)
-                        year_data["contaminants"][clean_name] = c.get("highest_level")
+                        year_data["contaminants"][clean_name] = level
 
                         # Store metadata once per contaminant name
                         if clean_name not in contaminant_meta:
@@ -218,6 +225,15 @@ def build_dashboard_data(downloads_dir, metadata_path, output_path, limit=None):
     metadata = load_system_metadata(metadata_path)
     contaminant_data, contaminant_meta = load_contaminant_data(downloads_dir, limit=limit)
 
+    # Supplementary geocoded coords for systems TCEQ didn't publish a source
+    # water location for. Produced by geocode_missing.py.
+    geocoded = {}
+    geocoded_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "geocoded_coordinates.json")
+    if os.path.exists(geocoded_path):
+        with open(geocoded_path) as f:
+            geocoded = json.load(f)
+        print(f"Loaded {len(geocoded)} supplementary geocoded coordinates")
+
     print("Merging data...")
 
     # Separate structures for map vs details
@@ -247,8 +263,15 @@ def build_dashboard_data(downloads_dir, metadata_path, output_path, limit=None):
         except (ValueError, AttributeError):
             pass
 
-        # Get coordinates
+        # Get coordinates — first try the TCEQ source-water inventory, then
+        # fall back to the supplementary geocoded set.
         lat, lon = extract_coordinates(meta)
+        coord_source = "source_water_inventory" if lat is not None else None
+        if lat is None and system_id in geocoded:
+            g = geocoded[system_id]
+            lat = g["lat"]
+            lon = g["lon"]
+            coord_source = g.get("source")
         has_coords = lat is not None and lon is not None
         if has_coords:
             stats["systems_with_coordinates"] += 1
@@ -260,6 +283,8 @@ def build_dashboard_data(downloads_dir, metadata_path, output_path, limit=None):
             "c": meta.get("meta", {}).get("county", "Unknown"),  # county
             "t": meta.get("meta", {}).get("system_type", ""),  # system_type
         }
+        if coord_source and coord_source != "source_water_inventory":
+            detail_entry["cs"] = coord_source  # coord_source tag for fallback pins
 
         years_data = {}
 

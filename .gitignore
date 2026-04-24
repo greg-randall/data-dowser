@@ -19,3 +19,4 @@ test_docs/
 *.tmp
 *.csv
 !texas_water_quality.csv
+*bak/
