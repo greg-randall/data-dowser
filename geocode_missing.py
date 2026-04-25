@@ -449,7 +449,9 @@ def main():
 
     for i, s in enumerate(targets, 1):
         sid = s["system_id"]
-        county = (s.get("county") or "").strip().upper()
+        # Use profile metadata for county as primary, fallback to leaderboard
+        p_meta = profile.get(sid, {}).get("meta", {})
+        county = (p_meta.get("county") or s.get("county") or "").strip().upper()
 
         if args.verbose:
             print(f"[{i}/{len(targets)}] {sid} ({s.get('system_name')}) County: {county}")
@@ -459,18 +461,20 @@ def main():
             if args.verbose:
                 print(f"  !! No cache HTML found at {html_path}")
             buckets["no_address"] += 1
-            continue
+            # Still try to use county from profile even if HTML is missing
+            if county in JUNK_COUNTIES:
+                continue
+        else:
+            with html_path.open() as f:
+                soup = BeautifulSoup(f.read(), "html.parser")
 
-        with html_path.open() as f:
-            soup = BeautifulSoup(f.read(), "html.parser")
-
-        # If leaderboard's county is junk, try to recover from HTML survey table
-        if county in JUNK_COUNTIES:
-            survey_county = extract_survey_county(soup)
-            if survey_county:
-                if args.verbose:
-                    print(f"  Recovered county from HTML survey table: {survey_county}")
-                county = survey_county
+            # If county is still junk, try to recover from HTML survey table
+            if county in JUNK_COUNTIES:
+                survey_county = extract_survey_county(soup)
+                if survey_county:
+                    if args.verbose:
+                        print(f"  Recovered county from HTML survey table: {survey_county}")
+                    county = survey_county
 
         # Look up derived geography; if absent, fall back to Nominatim
         county_geo = geography.get(county)

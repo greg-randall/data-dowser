@@ -45,6 +45,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", default=str(CSV_PATH), help="Path to flat CSV")
     parser.add_argument("--out", default=str(OUT_PATH), help="Output JSON path")
+    parser.add_argument("--metadata", default="water_system_data_full_profile.json",
+                        help="Supplementary system metadata JSON path")
     parser.add_argument("--min-year", type=int, default=None,
                         help="Inclusive lower bound on reporting year")
     parser.add_argument("--max-year", type=int, default=None,
@@ -59,6 +61,14 @@ def main():
     if not csv_path.exists():
         print(f"ERROR: CSV not found at {csv_path}", file=sys.stderr)
         sys.exit(1)
+
+    # Load supplementary metadata if available
+    metadata_path = Path(args.metadata)
+    supplementary_meta = {}
+    if metadata_path.exists():
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            supplementary_meta = json.load(f)
+        print(f"Loaded supplementary metadata from {metadata_path}")
 
     systems = {}
     total_rows = 0
@@ -91,15 +101,20 @@ def main():
             total_rows += 1
             sid = row["system_id"]
             if sid not in systems:
+                # Use supplementary metadata for initial values if available
+                meta = supplementary_meta.get(sid, {}).get("meta", {})
+                pop_supp = to_float(meta.get("population", "").replace(",", ""))
+                county_supp = meta.get("county", "").upper() if meta.get("county") else None
+
                 systems[sid] = {
                     "system_id": sid,
                     "system_name": row["system_name"],
                     "city": extract_city(row["system_name"]),
-                    "county": row["county"],
+                    "county": row["county"] if row["county"] and "NO SITE" not in row["county"].upper() else (county_supp or row["county"]),
                     "latitude": to_float(row["latitude"]),
                     "longitude": to_float(row["longitude"]),
                     "coord_source": None,
-                    "population": to_float(row["population"]),
+                    "population": pop_supp,
                     "violation_count": 0,
                     "severity_sum": 0.0,
                     "violations_missing_mcl": 0,
@@ -191,6 +206,7 @@ def main():
         (math.log1p(s["impact_score"]) for s in systems.values() if s["impact_score"]),
         default=0,
     )
+
     for s in systems.values():
         s["severity_norm"] = (
             math.log1p(s["severity_sum"]) / sev_log_max

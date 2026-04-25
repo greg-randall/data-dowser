@@ -7,75 +7,55 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body class="leaderboard">
-<header>
-    <h1>Texas Water Quality Leaderboard</h1>
-    <div class="sub">
-        Ranked worst → best by total violation severity.
-        <button class="explain-trigger" id="explainBtn">How is this ranked?</button>
-        <div style="margin-top: 8px;">See the <a href="index.html">map dashboard</a>.</div>
-    </div>
-</header>
 
 <div class="popover-overlay" id="popoverOverlay">
     <div class="popover-content">
         <button class="popover-close" id="popoverClose">&times;</button>
         <h2>How is this ranked?</h2>
         
-        <div class="popover-section">
-            <p>
-                This list ranks every public water system in Texas from worst to best based on the severity of drinking-water violations.
-            </p>
-        </div>
+        <p style="margin-bottom: 20px;">
+            This list ranks every public water system in Texas from <b>worst to best</b> based on violations of mandated limits. 
+            <i>Click any system name to open its full violation history on the map.</i>
+        </p>
 
         <div class="popover-section">
             <h3>Severity Score</h3>
             <p>
-                For every violation, we take how much contaminant showed up and divide it by the legal limit, then add them together.
+                We divide each contaminant reading by its legal limit and add them together. 
             </p>
-            <p style="margin-top: 10px;">
-                In the case of Silver Creek in 2014 they had 345 units of Radium where the limit is 5, so that one test alone gives them a severity of 69x (345/5=69). That then gets added to a bunch of other violations to get them to 360.21.
-            </p>
-            <p style="margin-top: 10px;">
-                Since some systems have been around for 15 years and others only 2, we also show <b>Annual Score</b>. 
-                This is the total severity divided by the number of years the system has been active, 
-                giving you a better sense of their yearly track record.
+            <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
+                <i>Example: In 2014, Silver Creek had 69x the legal limit of Radium (345 / 5 = 69). By adding up every violation since 2010, they reached a total Severity Score of 360.21.</i>
             </p>
         </div>
 
         <div class="popover-section">
-            <h3>Impact</h3>
+            <h3>Annual Score</h3>
             <p>
-                <b>Impact</b> is the score that asks how bad is this at a population level. It multiplies Severity by the population the system serves.
-            </p>
-            <p style="margin-top: 10px;">
-                A tiny town with god-awful violations can actually score lower on Impact than a bigger place with milder problems—because 
-                fewer people are exposed. It’s what keeps the small-town nightmares from getting lost in the shuffle.
+                Total severity divided by years active. This lets us compare a system with only two years of data directly to one with fifteen.
             </p>
         </div>
 
         <div class="popover-section">
             <h3>The Composite Score</h3>
             <p>
-                The <b>Composite Score</b> blends Severity and Impact into one number.
+                Our primary ranking metric. It blends <b>Severity (70%)</b> and <b>Population (30%)</b>.
             </p>
-            <p style="margin-top: 10px;">
-                To keep extreme outliers from dominating the rankings, both values are scaled before being combined. 
-                The final score is weighted 70% toward Severity and 30% toward Impact. It’s a single metric 
-                designed to highlight which systems have the most serious, real-world water problems right now.
-                <br><br>
-                <i>* Systems with an <b>Unknown</b> population are ranked based on their Severity Score only.</i>
+            <p style="margin-top: 8px;">
+                We weight Severity heavily so that small towns with "nightmare" water aren't buried by the sheer headcount of big cities.
+            </p>
+            <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
+                <i>* Systems with an unknown population are ranked by Severity only.</i>
             </p>
         </div>
 
         <div class="popover-section">
-            <h3>A Note on the Data</h3>
+            <h3>Data Integrity</h3>
             <p>
-                We only fixed one obvious typo from 2016 in Fayette County that was 4,500&times; higher than everything else that year. 
-                Everything else is straight from the state reports.
+                We fixed one obvious typo from 2016 (Fayette County) that was 4,500x higher than any other year. Everything else is raw state data.
             </p>
         </div>
 
-        <div class="welcome-footer" style="padding: 16px 0 0 0; border-top: 1px solid #3A2518; margin-top: 20px;">
+        <div class="welcome-footer">
             <label>
                 <input type="checkbox" id="popoverDontShow">
                 Don't show this again
@@ -84,6 +64,15 @@
         </div>
     </div>
 </div>
+
+<header>
+    <h1>Texas Water Quality Leaderboard</h1>
+    <div class="sub">
+        Ranked worst → best by total violation severity.
+        <button class="explain-trigger" id="explainBtn">How is this ranked?</button>
+        <div style="margin-top: 8px;">See the <a href="index.html">map dashboard</a>.</div>
+    </div>
+</header>
 
 <div class="outlier-warn" id="outlierWarn" hidden>
     Note: some top entries are driven by a single extreme reading likely caused by a data-entry error
@@ -97,6 +86,7 @@
     <div class="stats" id="stats"></div>
 </div>
 
+<div class="table-wrapper">
 <table id="t">
     <thead>
         <tr>
@@ -106,7 +96,7 @@
             <th data-key="county" title="County where the system is located">County</th>
             <th data-key="population" class="num" title="Total population served by this system">Pop.</th>
             <th data-key="active_years_count" class="num" title="Number of years (out of 15) this system has reported data">Years</th>
-            <th data-key="violation_count" class="num" title="Total number of health-based violations reported since 2010">Violations</th>
+            <th data-key="violation_count" class="num" title="Total number of mandated limit violations reported since 2010">Violations</th>
             <th data-key="severity_sum" class="num" title="Total Toxicity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity Score</th>
             <th data-key="annual_severity" class="num" title="Average yearly toxicity: total severity divided by years active.">Annual Score</th>
             <th data-key="avg_severity" class="num" title="The average intensity of each violation.">Avg Viol.</th>
@@ -117,6 +107,7 @@
     </thead>
     <tbody id="tb"></tbody>
 </table>
+</div>
 <div class="empty" id="empty" hidden>No systems match the current filter.</div>
 
 <script>
@@ -220,13 +211,16 @@ function render() {
         const nameCell = hasCoords
             ? `<a class="name-link" href="index.html?system=${sidEnc}${yearParam}">${nameEsc}</a>`
             : `<span class="no-map">${nameEsc}</span><span class="no-map-tag" title="TCEQ has no coordinates for this system">no map</span>`;
+        
+        const explainer = s.explainer ? `<div class="explainer-text">${s.explainer}</div>` : "";
+
         const compScoreCell = s.composite_score !== null 
             ? fmt(s.composite_score, 3) 
             : `<span class="no-impact" title="Unknown population — ranked by Severity Score only">${fmt(0.7 * s.severity_norm, 3)}*</span>`;
 
         tr.innerHTML = `
             <td class="sid">${sidCell}</td>
-            <td>${nameCell}</td>
+            <td>${nameCell}${explainer}</td>
             <td>${s.city || ""}</td>
             <td>${s.county || ""}</td>
             <td class="num">${fmtPop(s.population)}</td>
