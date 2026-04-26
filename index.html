@@ -263,7 +263,7 @@
                             <tr>
                                 <th>Contaminant</th>
                                 <th>Level</th>
-                                <th>MCL</th>
+                                <th title="Maximum Contaminant Level: The highest level of a contaminant allowed in drinking water.">MCL</th>
                             </tr>
                         </thead>
                         <tbody id="contaminant-tbody">
@@ -777,36 +777,30 @@
 
                 hasMatchingYear = true;
 
-                const violations = new Set(yearData.violations || []);
-                if (violations.size > 0) {
+                if (yearData.violations?.length > 0) {
                     hasAnyViolation = true;
                 }
 
-                // Check categories and violations within those categories
+                // Check for data in selected categories
                 for (const [cname, cdata] of Object.entries(yearData.contaminants || {})) {
                     const cats = cdata.categories || [];
                     for (const cat of cats) {
                         if (filters.categories[cat]) {
                             hasMatchingCategory = true;
-                            if (violations.has(cname)) {
-                                hasViolationInCategory = true;
-                            }
                         }
                     }
                 }
             }
 
-            // If no category filters are checked, show all categories
-            if (!anyCategory) {
-                hasMatchingCategory = true;
-                hasViolationInCategory = hasAnyViolation;
+            // Violations-only filter: if on, show any system with a violation in the period
+            if (filters.violationsOnly) {
+                return hasAnyViolation;
             }
 
-            // Violations-only filter: require violation in selected category
-            if (filters.violationsOnly && !hasViolationInCategory) return false;
-
-            // Must have data in at least one selected category
-            if (anyCategory && !hasMatchingCategory) return false;
+            // Category filter: if categories are selected, show systems with data in them
+            if (anyCategory) {
+                return hasMatchingCategory;
+            }
 
             return hasMatchingYear || Object.keys(system.years || {}).length === 0;
         }

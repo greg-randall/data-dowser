@@ -10,6 +10,7 @@ import math
 import re
 import sys
 from pathlib import Path
+from titlecase import titlecase
 
 from data_patches import apply_patch
 
@@ -23,13 +24,31 @@ IMPACT_WEIGHT = 0.3
 CITY_RE = re.compile(r"^\s*(?:CITY|TOWN|VILLAGE)\s+OF\s+(.+?)\s*$", re.IGNORECASE)
 
 
+def acronym_callback(word, **kwargs):
+    # Specific water industry acronyms to keep capped
+    acronyms = {"WSC", "WCID", "MUD", "SUD", "FWSD", "PWS", "ISD", "VFD"}
+    if word.upper() in acronyms:
+        return word.upper()
+    # If it's a single letter like 'A', 'B', etc. (common in unit names)
+    if len(word) == 1 and word.isupper():
+        return word
+    return None
+
+
+def smart_title(text):
+    if not text:
+        return ""
+    # titlecase handles prepositions; callback handles technical acronyms
+    return titlecase(text, callback=acronym_callback)
+
+
 def extract_city(system_name):
     if not system_name:
         return ""
     m = CITY_RE.match(system_name)
     if not m:
         return ""
-    return m.group(1).strip().title()
+    return smart_title(m.group(1).strip())
 
 
 def to_float(s):
@@ -108,9 +127,9 @@ def main():
 
                 systems[sid] = {
                     "system_id": sid,
-                    "system_name": row["system_name"],
+                    "system_name": smart_title(row["system_name"]),
                     "city": extract_city(row["system_name"]),
-                    "county": row["county"] if row["county"] and "NO SITE" not in row["county"].upper() else (county_supp or row["county"]),
+                    "county": smart_title(row["county"]) if row["county"] and "NO SITE" not in row["county"].upper() else smart_title(county_supp or row["county"]),
                     "latitude": to_float(row["latitude"]),
                     "longitude": to_float(row["longitude"]),
                     "coord_source": None,
@@ -153,7 +172,7 @@ def main():
             if severity > s["worst_severity"]:
                 s["worst_severity"] = severity
                 s["worst_violation"] = {
-                    "contaminant": row["contaminant"],
+                    "contaminant": smart_title(row["contaminant"]),
                     "year": int(row["year"]) if row["year"] else None,
                     "level": level,
                     "mcl": mcl,

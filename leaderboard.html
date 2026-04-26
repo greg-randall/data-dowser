@@ -11,22 +11,26 @@
 <div class="popover-overlay" id="popoverOverlay">
     <div class="popover-content">
         <button class="popover-close" id="popoverClose">&times;</button>
-        <h2>How is this ranked?</h2>
+        <h2>About the Leaderboard</h2>
         
         <p style="margin-bottom: 20px;">
-            This list ranks every public water system in Texas from <b>worst to best</b> based on violations of mandated limits. 
-            <i>Click any system name to open its full violation history on the map.</i>
+            This list ranks every public water system in Texas from <b>worst to best</b> based on violations of mandated limits.
+        </p>
+        <p class="popover-instruction">
+            Click any system name to open its full violation history on the map.
         </p>
 
         <div class="popover-section">
             <h3>Severity Score</h3>
             <p>
-                We divide each contaminant reading by its legal limit and add them together. 
+                The total "toxicity load" since 2010. We divide each contaminant reading by its legal limit and add them together. 
+                The legal limit is officially called the <b>Maximum Contaminant Level (MCL)</b>.
             </p>
             <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
-                <i>Example: In 2014, Silver Creek had 69x the legal limit of Radium (345 / 5 = 69). By adding up every violation since 2010, they reached a total Severity Score of 360.21.</i>
+                Example: In 2014, Silver Creek had 345 units of Radium where the limit is 5 (345 / 5 = 69x the limit). Combined with all other violations, they reached a total Severity Score of 360.21.
             </p>
         </div>
+
 
         <div class="popover-section">
             <h3>Annual Score</h3>
@@ -90,19 +94,15 @@
 <table id="t">
     <thead>
         <tr>
-            <th data-key="system_id" title="TCEQ Public Water System (PWS) Identifier">System ID</th>
             <th data-key="system_name" title="Official name of the water system">Name</th>
             <th data-key="city" title="Primary city served by this system">City</th>
             <th data-key="county" title="County where the system is located">County</th>
             <th data-key="population" class="num" title="Total population served by this system">Pop.</th>
             <th data-key="active_years_count" class="num" title="Number of years (out of 15) this system has reported data">Years</th>
-            <th data-key="violation_count" class="num" title="Total number of mandated limit violations reported since 2010">Violations</th>
             <th data-key="severity_sum" class="num" title="Total Toxicity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity Score</th>
             <th data-key="annual_severity" class="num" title="Average yearly toxicity: total severity divided by years active.">Annual Score</th>
-            <th data-key="avg_severity" class="num" title="The average intensity of each violation.">Avg Viol.</th>
             <th data-key="composite_score" class="num" title="A balanced ranking metric: 70% Severity Score, 30% Population Impact">Composite</th>
-            <th data-key="_worst_sev" class="num" title="The single most toxic test result recorded: how many times the legal limit it reached.">Worst</th>
-            <th data-key="_worst_c" title="The contaminant responsible for this system's peak severity reading">Worst Contaminant</th>
+            <th data-key="_worst_sev" title="The single most toxic test result recorded: how many times the legal limit it reached.">Worst Violation</th>
         </tr>
     </thead>
     <tbody id="tb"></tbody>
@@ -218,20 +218,23 @@ function render() {
             ? fmt(s.composite_score, 3) 
             : `<span class="no-impact" title="Unknown population — ranked by Severity Score only">${fmt(0.7 * s.severity_norm, 3)}*</span>`;
 
+        const worstLabel = w ? `<b>${fmt(w.severity, 1)}x</b> ${w.contaminant}` : "—";
+        const worstDetail = w ? `<div class="worst">${w.year ?? ""} · ${fmt(w.level)} ${w.units} / MCL ${fmt(w.mcl)}</div>` : "";
+
         tr.innerHTML = `
-            <td class="sid">${sidCell}</td>
-            <td>${nameCell}${explainer}</td>
+            <td>
+                ${nameCell}
+                <div class="sid" style="font-size: 0.8em; color: #6B5A3A; margin-top: 2px;">${sidCell}</div>
+                ${explainer}
+            </td>
             <td>${s.city || ""}</td>
             <td>${s.county || ""}</td>
             <td class="num">${fmtPop(s.population)}</td>
             <td class="num">${s.active_years_count || 0}</td>
-            <td class="num">${s.violation_count}</td>
             <td class="num ${sevClass}">${fmt(s.severity_sum)}</td>
             <td class="num">${fmt(s.annual_severity)}</td>
-            <td class="num">${fmt(s.avg_severity)}</td>
             <td class="num">${compScoreCell}</td>
-            <td class="num">${worstCellSev}</td>
-            <td>${worstCellC}</td>
+            <td>${worstLabel}${worstDetail}</td>
         `;
         frag.appendChild(tr);
     }

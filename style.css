@@ -678,9 +678,8 @@ body {
 }
 
 .welcome-footer label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75em;
-    letter-spacing: 0.08em;
+    font-family: 'Lora', serif;
+    font-size: 0.85em;
     color: #6B5A3A;
     display: flex;
     align-items: center;
@@ -699,11 +698,10 @@ body {
     background: #C44B22;
     color: #fff;
     border: none;
-    padding: 10px 24px;
-    border-radius: 6px;
-    font-family: 'Unbounded', sans-serif;
-    font-weight: 700;
-    font-size: 0.75em;
+    padding: 8px 24px;
+    border-radius: 4px;
+    font-family: 'League Gothic', sans-serif;
+    font-size: 1.4em;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     cursor: pointer;
@@ -1043,12 +1041,30 @@ body.leaderboard {
     padding-bottom: 10px;
 }
 .popover-section { margin-bottom: 24px; }
+
+.popover-section h3 {
+    font-family: 'League Gothic', sans-serif;
+    font-size: 1.6em;
+    color: #C9901A;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
 .popover-content p,
-.popover-section p {
+.popover-section p,
+.welcome-footer label {
     font-family: 'Lora', serif;
-    font-size: 0.95em;
+    font-size: 0.9em;
     line-height: 1.6;
     color: #CFC3A3;
+}
+
+.popover-instruction {
+    font-size: 0.8em !important;
+    color: #6B5A3A !important;
+    margin-top: -15px;
+    margin-bottom: 25px;
 }
 .popover-section code {
     background: #1A1208;
