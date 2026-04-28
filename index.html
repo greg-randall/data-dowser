@@ -88,26 +88,19 @@
 
             <div class="filter-section">
                 <h3>Search</h3>
-                <input type="text" id="search-input" class="search-input"
-                       placeholder="System, city, or county..." autocomplete="off">
-            </div>
-
-            <div>
-                <h2>Filter by Issue</h2>
-                <div class="featured-filters">
-                    <button class="featured-btn all active" data-filter="all">All Systems</button>
-                    <button class="featured-btn oil-gas" data-filter="oil_gas">Oil & Gas (BTEX)</button>
-                    <button class="featured-btn radioactive" data-filter="radioactive">Radioactive</button>
-                    <button class="featured-btn arsenic" data-filter="arsenic">Arsenic</button>
+                <div class="search-container">
+                    <input type="text" id="search-input" class="search-input"
+                           placeholder="System, city, or county..." autocomplete="off">
+                    <div id="search-results" class="search-results hidden"></div>
                 </div>
             </div>
 
             <div class="filter-section">
-                <h3>Contaminant Categories</h3>
+                <h3>Issues & Categories</h3>
                 <div class="checkbox-group">
                     <label>
                         <input type="checkbox" id="filter-oil_gas" checked>
-                        Oil & Gas (Benzene, Toluene, Xylene)
+                        Oil & Gas (BTEX)
                     </label>
                     <label>
                         <input type="checkbox" id="filter-radioactive" checked>
@@ -125,6 +118,18 @@
                         <input type="checkbox" id="filter-disinfection_byproducts" checked>
                         Disinfection Byproducts
                     </label>
+                </div>
+
+                <div class="specific-contaminant-section" style="margin-top: 16px; border-top: 1px solid #3A2518; padding-top: 16px;">
+                    <h3 style="font-size: 0.8em; opacity: 0.8; margin-bottom: 8px;">Specific Contaminants</h3>
+                    <div id="contaminant-picker" class="contaminant-picker">
+                        <input type="text" id="contaminant-search" placeholder="Search for 'arsenic', 'lead', etc..." class="contaminant-search">
+                        <div id="contaminant-categories" style="max-height: 200px; overflow-y: auto; margin-top: 8px;"></div>
+                        <div class="picker-footer">
+                            <button type="button" class="picker-btn" id="clear-all-btn">Clear Specific Selection</button>
+                            <span id="selected-count">0 selected</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -281,8 +286,6 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Leaflet Heat -->
-    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <!-- D3 -->
     <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
 
@@ -302,16 +305,10 @@
         let selectedRing = null;
         let selectedContaminant = null;  // For contaminant time-series view
         let colorMode = 'violations';
-        let selectedContaminantsForHeatmap = new Set();
+        let selectedSpecificContaminants = new Set();
 
-        // Category colors
-        const CATEGORY_COLORS = {
-            oil_gas: '#ff6b6b',
-            radioactive: '#ffd93d',
-            heavy_metals: '#6bcb77',
-            agricultural: '#4dabf7',
-            disinfection_byproducts: '#cc5de8'
-        };
+        // ... existing colors ...
+
 
         /**
          * Expand map data (minimal) for marker rendering.
@@ -419,9 +416,9 @@
                     checkbox.dataset.category = cat;
                     checkbox.onchange = () => {
                         if (checkbox.checked) {
-                            selectedContaminantsForHeatmap.add(contaminantName);
+                            selectedSpecificContaminants.add(contaminantName);
                         } else {
-                            selectedContaminantsForHeatmap.delete(contaminantName);
+                            selectedSpecificContaminants.delete(contaminantName);
                         }
                         updateSelectedCount();
                         renderMap();
@@ -441,13 +438,13 @@
 
         function updateSelectedCount() {
             document.getElementById('selected-count').textContent =
-                selectedContaminantsForHeatmap.size + ' selected';
+                selectedSpecificContaminants.size + ' selected';
         }
 
-        // Select contaminants by filter category (for featured buttons in concentration mode)
+        // Select contaminants by filter category
         function selectContaminantsByCategory(filterCategory) {
             // Clear current selections
-            selectedContaminantsForHeatmap.clear();
+            selectedSpecificContaminants.clear();
 
             // Uncheck all checkboxes first
             document.querySelectorAll('#contaminant-categories input[type="checkbox"]').forEach(cb => {
@@ -467,7 +464,7 @@
                     : categories.includes(filterCategory);
 
                 if (matchesFilter) {
-                    selectedContaminantsForHeatmap.add(name);
+                    selectedSpecificContaminants.add(name);
                     // Check the corresponding checkbox
                     const cb = document.querySelector(`#contaminant-categories input[value="${name}"]`);
                     if (cb) cb.checked = true;
@@ -481,10 +478,10 @@
         // Also computes maxSum for cumulative scoring
         function computeContaminantRanges(filters) {
             const ranges = {};
-            if (selectedContaminantsForHeatmap.size === 0) return { ranges, maxSum: 0 };
+            if (selectedSpecificContaminants.size === 0) return { ranges, maxSum: 0 };
 
             // First pass: compute min/max for each contaminant
-            for (const cname of selectedContaminantsForHeatmap) {
+            for (const cname of selectedSpecificContaminants) {
                 let min = Infinity;
                 let max = -Infinity;
 
@@ -514,7 +511,7 @@
                 if (!systemMatchesFilters(system, filters)) continue;
 
                 let systemSum = 0;
-                for (const cname of selectedContaminantsForHeatmap) {
+                for (const cname of selectedSpecificContaminants) {
                     const range = ranges[cname];
                     if (!range || range.max === range.min) continue;
 
@@ -565,12 +562,12 @@
         // Get concentration-based color for a system
         // Uses cumulative sum of normalized values, normalized by maxSum
         function getConcentrationColor(system, filters, ranges, maxSum) {
-            if (selectedContaminantsForHeatmap.size === 0) return '#888';
+            if (selectedSpecificContaminants.size === 0) return '#888';
 
             let totalNormalized = 0;
             let hasAnyData = false;
 
-            for (const cname of selectedContaminantsForHeatmap) {
+            for (const cname of selectedSpecificContaminants) {
                 const range = ranges[cname];
                 if (!range || range.max === range.min) continue;
 
@@ -680,6 +677,9 @@
                 // Build the contaminant picker now that we have the data
                 buildContaminantPicker();
 
+                // Re-render map with precise detailed data
+                renderMap();
+
                 // If info panel is open and waiting for details, refresh it
                 if (selectedSystem) {
                     const system = mapData.systems.find(s => s.id === selectedSystem.id);
@@ -724,6 +724,7 @@
                     heavy_metals: document.getElementById('filter-heavy_metals').checked,
                     disinfection_byproducts: document.getElementById('filter-disinfection_byproducts').checked
                 },
+                specificContaminants: selectedSpecificContaminants,
                 yearMin: parseInt(document.getElementById('year-min').value),
                 yearMax: parseInt(document.getElementById('year-max').value),
                 populationMin: parseInt(document.getElementById('population-min').value),
@@ -745,7 +746,6 @@
             if (!system.lat || !system.lon) return false;
 
             // Free-text search: match query against id, name, or county.
-            // name/county only exist after details load — without them, only id matches.
             if (filters.query) {
                 const q = filters.query;
                 const hay = [
@@ -758,50 +758,76 @@
 
             // Before details are loaded, use precomputed violation status for basic filtering
             if (!detailsLoaded) {
-                // violationStatus: 0=none, 1=old, 2=recent
                 if (filters.violationsOnly && system.violationStatus === 0) return false;
-                return true;  // Show all systems until details are loaded
+                // If specific contaminants are requested but details aren't loaded, we can't filter yet
+                if (filters.specificContaminants.size > 0) return true; 
+                return true;
             }
 
-            // Check years and violations (only when details are loaded)
+            // Check years and violations
             let hasMatchingYear = false;
             let hasAnyViolation = false;
             let hasMatchingCategory = false;
             let hasViolationInCategory = false;
+            let hasMatchingSpecific = false;
+            let hasViolationInSpecific = false;
 
-            const anyCategory = Object.values(filters.categories).some(v => v);
+            const anyCategoryFilter = Object.values(filters.categories).some(v => v);
+            const anySpecificFilter = filters.specificContaminants.size > 0;
 
             for (const [year, yearData] of Object.entries(system.years || {})) {
                 const y = parseInt(year);
                 if (y < filters.yearMin || y > filters.yearMax) continue;
 
                 hasMatchingYear = true;
-
-                if (yearData.violations?.length > 0) {
+                
+                const yearViolations = yearData.violations || [];
+                if (yearViolations.length > 0) {
                     hasAnyViolation = true;
                 }
 
-                // Check for data in selected categories
+                // Check contaminants
                 for (const [cname, cdata] of Object.entries(yearData.contaminants || {})) {
+                    const isViol = yearViolations.includes(cname);
+                    
+                    // 1. Check Categories
                     const cats = cdata.categories || [];
                     for (const cat of cats) {
                         if (filters.categories[cat]) {
                             hasMatchingCategory = true;
+                            if (isViol) hasViolationInCategory = true;
                         }
+                    }
+
+                    // 2. Check Specific Contaminants
+                    if (filters.specificContaminants.has(cname)) {
+                        hasMatchingSpecific = true;
+                        if (isViol) hasViolationInSpecific = true;
                     }
                 }
             }
 
-            // Violations-only filter: if on, show any system with a violation in the period
+            // FILTERING LOGIC
+            
+            // Priority 1: Specific Contaminants (if any selected, must match at least one)
+            if (anySpecificFilter) {
+                if (!hasMatchingSpecific) return false;
+                if (filters.violationsOnly && !hasViolationInSpecific) return false;
+                // If specific matches, we ignore category filters for this system
+                return true;
+            }
+
+            // Priority 2: Categories (if none specific selected)
             if (filters.violationsOnly) {
+                if (anyCategoryFilter) return hasViolationInCategory;
                 return hasAnyViolation;
             }
 
-            // Category filter: if categories are selected, show systems with data in them
-            if (anyCategory) {
+            if (anyCategoryFilter) {
                 return hasMatchingCategory;
             }
 
+            // Fallback: match by year range only
             return hasMatchingYear || Object.keys(system.years || {}).length === 0;
         }
 
@@ -862,18 +888,54 @@
             return marker;
         }
 
+        // Highlight a system's marker with a bullseye
+        function updateMarkerHighlight() {
+            // Remove existing ring
+            if (selectedRing) {
+                markersLayer.removeLayer(selectedRing);
+                selectedRing = null;
+            }
+
+            if (!selectedSystem) return;
+
+            // 1. Try to find the existing marker to style it
+            const hit = currentMarkers.find(m => m.system.id === selectedSystem.id);
+            selectedMarker = hit ? hit.marker : null;
+
+            if (selectedMarker) {
+                selectedMarker.setStyle({
+                    weight: 3,
+                    color: '#C9901A'
+                });
+                selectedMarker.bringToFront();
+            }
+
+            // 2. Always draw the big bullseye ring at the coordinates
+            // This ensures it shows up even if the system is filtered out
+            if (typeof selectedSystem.lat === 'number' && typeof selectedSystem.lon === 'number') {
+                selectedRing = L.circleMarker([selectedSystem.lat, selectedSystem.lon], {
+                    radius: 25, // Large enough to see when zoomed out
+                    fillColor: 'transparent',
+                    fillOpacity: 0,
+                    color: '#C9901A',
+                    weight: 4,
+                    opacity: 0.8,
+                    interactive: false // Don't block clicks to the marker underneath
+                });
+                markersLayer.addLayer(selectedRing);
+            }
+        }
+
         // Render map with current filters
         function renderMap() {
             if (!mapData) return;
 
             const filters = getFilters();
 
-            // Clear selected marker state
-            selectedMarker = null;
-            selectedRing = null;
-
             // Clear existing
             markersLayer.clearLayers();
+            selectedRing = null; // Layer was cleared, reference is dead
+
             if (heatLayer) {
                 map.removeLayer(heatLayer);
                 heatLayer = null;
@@ -1004,34 +1066,14 @@
             clearSelectedMarker();
 
             selectedSystem = system;
-            selectedMarker = marker || null;
+            
+            // Re-draw highlight (finds marker if one wasn't provided)
+            updateMarkerHighlight();
 
             // Sync URL so copy-paste opens this same system
             const url = new URL(location.href);
             url.searchParams.set('system', system.id);
             history.replaceState(null, '', url);
-
-            // Highlight selected marker
-            if (selectedMarker) {
-                selectedMarker.setStyle({
-                    weight: 3,
-                    color: '#C9901A'
-                });
-                selectedMarker.bringToFront();
-
-                // Add outer highlight ring
-                const latlng = selectedMarker.getLatLng();
-                selectedRing = L.circleMarker(latlng, {
-                    radius: selectedMarker.getRadius() + 10,
-                    fillColor: 'transparent',
-                    fillOpacity: 0,
-                    color: '#C9901A',
-                    weight: 5,
-                    opacity: 1
-                });
-                markersLayer.addLayer(selectedRing);
-                selectedMarker.bringToFront();
-            }
 
             // Show basic info (always available from map data)
             document.getElementById('info-id').textContent = system.id;
@@ -1636,13 +1678,74 @@
         // Initialize population range fill
         updatePopRangeFill();
 
-        // Map mode radio buttons
-        document.querySelectorAll('input[name="map-mode"]').forEach(input => {
-            input.addEventListener('change', renderMap);
+        // Free-text search: show suggestions
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            if (query.length < 2) {
+                searchResults.innerHTML = '';
+                searchResults.classList.add('hidden');
+                renderMap(); // Still filter map for short queries
+                return;
+            }
+
+            // Find matches
+            const filters = getFilters();
+            const matches = [];
+            for (const system of mapData.systems) {
+                const name = (system.name || '').toLowerCase();
+                const id = system.id.toLowerCase();
+                const county = (system.county || '').toLowerCase();
+                
+                if (name.includes(query) || id.includes(query) || county.includes(query)) {
+                    matches.push(system);
+                }
+                if (matches.length >= 50) break; // Limit suggestions
+            }
+
+            // Render suggestions
+            if (matches.length > 0) {
+                searchResults.innerHTML = matches.map(s => `
+                    <div class="search-result-item" data-id="${s.id}">
+                        <span class="name">${decodeHtml(s.name || 'Unknown System')}</span>
+                        <span class="meta">${s.id} · ${s.county || 'Unknown County'}</span>
+                    </div>
+                `).join('');
+                searchResults.classList.remove('hidden');
+
+                // Add click handlers
+                searchResults.querySelectorAll('.search-result-item').forEach(item => {
+                    item.onclick = () => {
+                        const sid = item.dataset.id;
+                        const system = mapData.systems.find(s => s.id === sid);
+                        if (system) {
+                            searchInput.value = system.name || system.id;
+                            searchResults.classList.add('hidden');
+                            
+                            if (typeof system.lat === 'number' && typeof system.lon === 'number') {
+                                map.flyTo([system.lat, system.lon], 13, { duration: 1.0 });
+                            }
+                            showInfoPanel(system);
+                        }
+                    };
+                });
+            } else {
+                searchResults.innerHTML = '<div class="search-result-item" style="cursor: default; opacity: 0.7;">No matches found</div>';
+                searchResults.classList.remove('hidden');
+            }
+
+            // Still filter the map dots
+            renderMap();
         });
 
-        // Free-text search: re-render on every keystroke
-        document.getElementById('search-input').addEventListener('input', renderMap);
+        // Hide search results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
 
         // Color mode radio buttons
         document.querySelectorAll('input[name="color-mode"]').forEach(input => {

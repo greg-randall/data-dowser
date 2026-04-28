@@ -750,10 +750,54 @@ body {
 .contaminant-picker { margin-top: 12px; max-height: 300px; overflow-y: auto; }
 .contaminant-picker.hidden { display: none; }
 .contaminant-search,
-.search-input { width: 100%; padding: 8px; background: #3A2518; border: 1px solid #6B5A3A; border-radius: 4px; color: #CFC3A3; font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; margin-bottom: 10px; }
-.search-input { margin-bottom: 0; }
+.search-container { position: relative; width: 100%; }
+.search-input { width: 100%; padding: 8px; background: #3A2518; border: 1px solid #6B5A3A; border-radius: 4px; color: #CFC3A3; font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; }
 .search-input:focus { outline: none; border-color: #C9901A; }
 .search-input::placeholder { color: #6B5A3A; }
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #2D1B0E;
+    border: 1px solid #6B5A3A;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 5000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.search-results.hidden { display: none; }
+
+.search-result-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #3A2518;
+    transition: background 0.2s;
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: #3A2518; }
+
+.search-result-item .name {
+    display: block;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #f5f5f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-item .meta {
+    display: block;
+    font-size: 0.75em;
+    color: #6B5A3A;
+    margin-top: 2px;
+}
 .category-group { margin-bottom: 8px; }
 .category-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 8px; background: #3A2518; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75em; letter-spacing: 0.08em; text-transform: uppercase; color: #C9901A; }
 .category-header .chevron { transition: transform 0.2s; font-size: 0.7em; }
