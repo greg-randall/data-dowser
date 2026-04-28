@@ -1,0 +1,91 @@
+# Authoritative MCLs for common contaminants. 
+# Used to fix extraction errors (like MCL=0 or MCL=4 instead of 50) 
+# found in raw source reports.
+
+"Beta/photon emitters":
+  mcl: 50.0
+  units: "pCi/L"
+
+"Copper":
+  mcl: 1.3
+  units: "ppm"
+
+"Lead":
+  mcl: 15.0
+  units: "ppb"
+
+"Arsenic":
+  mcl: 10.0
+  units: "ppb"
+
+"Cyanide":
+  mcl: 200.0
+  units: "ppb"
+
+"Fluoride":
+  mcl: 4.0
+  units: "ppm"
+
+"Nitrate [measured as Nitrogen]":
+  mcl: 10.0
+  units: "ppm"
+
+"Nitrite [measured as Nitrogen]":
+  mcl: 1.0
+  units: "ppm"
+
+"Total Trihalomethanes (TTHM)":
+  mcl: 80.0
+  units: "ppb"
+
+"Haloacetic Acids (HAA5)":
+  mcl: 60.0
+  units: "ppb"
+
+"Combined Radium 226/228":
+  mcl: 5.0
+  units: "pCi/L"
+
+"Gross alpha excluding radon and uranium":
+  mcl: 15.0
+  units: "pCi/L"
+
+"Barium":
+  mcl: 2.0
+  units: "ppm"
+
+"Mercury":
+  mcl: 2.0
+  units: "ppb"
+
+"Selenium":
+  mcl: 50.0
+  units: "ppb"
+
+"Antimony":
+  mcl: 6.0
+  units: "ppb"
+
+"Beryllium":
+  mcl: 4.0
+  units: "ppb"
+
+"Cadmium":
+  mcl: 5.0
+  units: "ppb"
+
+"Chromium":
+  mcl: 100.0
+  units: "ppb"
+
+"Thallium":
+  mcl: 2.0
+  units: "ppb"
+
+"Atrazine":
+  mcl: 3.0
+  units: "ppb"
+
+"Di (2-ethylhexyl) phthalate":
+  mcl: 6.0
+  units: "ppb"

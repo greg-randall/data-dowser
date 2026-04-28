@@ -14,43 +14,42 @@
         <h2>About the Leaderboard</h2>
         
         <p style="margin-bottom: 20px;">
-            This list ranks every public water system in Texas from <b>worst to best</b> based on violations of mandated limits.
+            This list ranks public water systems based on violations of mandated legal limits, known as <b>Maximum Contaminant Levels (MCLs)</b>.
         </p>
         <p class="popover-instruction">
             Click any system name to open its full violation history on the map.
         </p>
 
         <div class="popover-section">
-            <h3>Severity Score</h3>
+            <h3>Severity</h3>
             <p>
-                The total "toxicity load" since 2010. We divide each contaminant reading by its legal limit and add them together. 
-                The legal limit is officially called the <b>Maximum Contaminant Level (MCL)</b>.
+                The cumulative "toxicity load" since 2010. It is the sum of every violation, 
+                measured by how many times a contaminant exceeded its official MCL.
             </p>
             <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
-                Example: In 2014, Silver Creek had 345 units of Radium where the limit is 5 (345 / 5 = 69x the limit). Combined with all other violations, they reached a total Severity Score of 360.21.
+                Example: In 2014, Silver Creek had 345 units of Radium where the limit is 5 (345 / 5 = 69x the limit). Combined with all other violations, they reached a total Severity of 360.21.
             </p>
         </div>
 
 
         <div class="popover-section">
-            <h3>Annual Score</h3>
+            <h3>Yearly Severity</h3>
             <p>
                 Total severity divided by years active. This lets us compare a system with only two years of data directly to one with fifteen.
             </p>
         </div>
 
         <div class="popover-section">
-            <h3>The Composite Score</h3>
+            <h3>Community Risk</h3>
             <p>
-                Our primary ranking metric. It blends <b>Severity (70%)</b> and <b>Population (30%)</b>.
-            </p>
-            <p style="margin-top: 8px;">
-                We weight Severity heavily so that small towns with "nightmare" water aren't buried by the sheer headcount of big cities.
+                A rating from 0–100 that blends <b>Severity (70%)</b> and <b>Population (30%)</b>. 
+                We weight Severity heavily so that small towns with dangerous water aren't buried by the sheer headcount of big cities.
             </p>
             <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
                 <i>* Systems with an unknown population are ranked by Severity only.</i>
             </p>
         </div>
+
 
         <div class="popover-section">
             <h3>Data Integrity</h3>
@@ -86,8 +85,7 @@
 
 <div class="controls">
     <input type="text" id="search" placeholder="Search by system, city, or county…" autofocus>
-    <label><input type="checkbox" id="hideZero" checked> Hide systems with 0 violations</label>
-    <div class="stats" id="stats"></div>
+    <label><input type="checkbox" id="hideZero" checked> <span id="hideZeroLabel">Hide systems with 0 violations</span></label>
 </div>
 
 <div class="table-wrapper">
@@ -99,9 +97,9 @@
             <th data-key="county" title="County where the system is located">County</th>
             <th data-key="population" class="num" title="Total population served by this system">Pop.</th>
             <th data-key="active_years_count" class="num" title="Number of years (out of 15) this system has reported data">Years</th>
-            <th data-key="severity_sum" class="num" title="Total Toxicity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity Score</th>
-            <th data-key="annual_severity" class="num" title="Average yearly toxicity: total severity divided by years active.">Annual Score</th>
-            <th data-key="composite_score" class="num" title="A balanced ranking metric: 70% Severity Score, 30% Population Impact">Composite</th>
+            <th data-key="severity_sum" class="num" title="Total Toxicity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity</th>
+            <th data-key="annual_severity" class="num" title="Average yearly toxicity: total severity divided by years active.">Yearly Severity</th>
+            <th data-key="composite_score" class="num" title="Risk rating (0-100): 70% Severity, 30% Population Impact">Community Risk</th>
             <th data-key="_worst_sev" title="The single most toxic test result recorded: how many times the legal limit it reached.">Worst Violation</th>
         </tr>
     </thead>
@@ -118,9 +116,9 @@ let sortDir = -1; // 1 asc, -1 desc
 
 const tb = document.getElementById("tb");
 const empty = document.getElementById("empty");
-const stats = document.getElementById("stats");
 const search = document.getElementById("search");
 const hideZero = document.getElementById("hideZero");
+const hideZeroLabel = document.getElementById("hideZeroLabel");
 const outlierWarn = document.getElementById("outlierWarn");
 const explainBtn = document.getElementById("explainBtn");
 const popoverOverlay = document.getElementById("popoverOverlay");
@@ -215,8 +213,8 @@ function render() {
         const explainer = s.explainer ? `<div class="explainer-text">${s.explainer}</div>` : "";
 
         const compScoreCell = s.composite_score !== null 
-            ? fmt(s.composite_score, 3) 
-            : `<span class="no-impact" title="Unknown population — ranked by Severity Score only">${fmt(0.7 * s.severity_norm, 3)}*</span>`;
+            ? fmt(s.composite_score * 100, 1) 
+            : `<span class="no-impact" title="Unknown population — ranked by Severity only">${fmt(0.7 * s.severity_norm * 100, 1)}*</span>`;
 
         const worstLabel = w ? `<b>${fmt(w.severity, 1)}x</b> ${w.contaminant}` : "—";
         const worstDetail = w ? `<div class="worst">${w.year ?? ""} · ${fmt(w.level)} ${w.units} / MCL ${fmt(w.mcl)}</div>` : "";
@@ -240,7 +238,9 @@ function render() {
     }
     tb.appendChild(frag);
     empty.hidden = FILTERED.length > 0;
-    stats.innerHTML = `<span>${FILTERED.length.toLocaleString()}</span> / ${ALL.length.toLocaleString()} systems`;
+    
+    const zeroCount = ALL.filter(s => s.violation_count === 0).length;
+    hideZeroLabel.textContent = `Hide ${zeroCount.toLocaleString()} systems with 0 violations`;
 
     for (const th of document.querySelectorAll("thead th")) {
         th.classList.remove("sorted-asc", "sorted-desc");
@@ -269,9 +269,9 @@ fetch("leaderboard.json")
     .then(r => r.json())
     .then(data => {
         ALL = data.systems;
-        // default: sort by rank asc (worst first since rank=1 is worst)
-        sortKey = "rank";
-        sortDir = 1;
+        // default: sort by risk descending (worst first)
+        sortKey = "composite_score";
+        sortDir = -1;
         if (ALL.some(s => s.worst_violation && s.worst_violation.severity > 500)) {
             outlierWarn.hidden = false;
         }

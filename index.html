@@ -1104,7 +1104,8 @@
                     btn.textContent = year;
                     btn.dataset.year = year;
 
-                    if (system.years[year].violations?.length > 0) {
+                    const hasViolations = system.years[year].violations && system.years[year].violations.length > 0;
+                    if (hasViolations) {
                         btn.classList.add('has-violation');
                     }
                     if (String(year) === String(selectedYear)) {

@@ -51,11 +51,23 @@ def extract_city(system_name):
     return smart_title(m.group(1).strip())
 
 
-def to_float(s):
-    if s is None or s == "":
+import yaml
+
+def load_contaminant_limits():
+    """Load authoritative MCLs from YAML file."""
+    yaml_path = Path(__file__).parent / "contaminant_limits.yaml"
+    if not yaml_path.exists():
+        return {}
+    with open(yaml_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
+
+CONTAMINANT_LIMITS = load_contaminant_limits()
+
+def to_float(v):
+    if v is None or v == "":
         return None
     try:
-        return float(s)
+        return float(v)
     except ValueError:
         return None
 
@@ -151,11 +163,35 @@ def main():
             if pop is not None and (s["population"] is None or pop > s["population"]):
                 s["population"] = pop
 
-            if row["violation"] != "True":
+            level = to_float(row["highest_level"])
+            mcl_raw = to_float(row["mcl"])
+            
+            # Use authoritative MCL if available
+            contaminant_name = row.get("contaminant", "")
+            limit_config = CONTAMINANT_LIMITS.get(contaminant_name, {})
+            mcl = limit_config.get("mcl", mcl_raw)
+
+            # FLAG VIOLATIONS
+            # We strictly enforce that level > mcl to count as a violation.
+            # Some raw data has violation=True even when level <= mcl.
+            is_violation = False
+            if level is not None and mcl is not None and mcl > 0:
+                if level > mcl:
+                    is_violation = True
+            
+            # Fallback to CSV flag only if we don't have enough data to disprove it
+            if not is_violation and row["violation"] == "True":
+                if level is not None and mcl is not None and mcl > 0:
+                    # Disproved by numbers
+                    is_violation = False
+                else:
+                    # Trust the flag since we can't check the math
+                    is_violation = True
+
+            if not is_violation:
                 continue
 
-            level = to_float(row["highest_level"])
-            level, dropped = apply_patch(sid, row.get("year"), row.get("contaminant"), level)
+            level, dropped = apply_patch(sid, row.get("year"), contaminant_name, level)
             if dropped:
                 continue
 

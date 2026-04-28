@@ -7,11 +7,14 @@ Merges contaminant data with location/population info for the dashboard.
 import json
 import os
 import re
+import math
+import multiprocessing
 from pathlib import Path
 from collections import defaultdict
 
 from functools import lru_cache
 import yaml
+from tqdm import tqdm
 
 from data_patches import apply_patch
 
@@ -23,8 +26,18 @@ def load_contaminant_categories():
         return yaml.safe_load(f)
 
 
-# Contaminant categories for filtering (loaded from YAML)
+def load_contaminant_limits():
+    """Load authoritative MCLs from YAML file."""
+    yaml_path = Path(__file__).parent / "contaminant_limits.yaml"
+    if not yaml_path.exists():
+        return {}
+    with open(yaml_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
+
+
+# Global config
 CONTAMINANT_CATEGORIES = load_contaminant_categories()
+CONTAMINANT_LIMITS = load_contaminant_limits()
 
 
 def normalize_contaminant_name(name):
@@ -77,116 +90,139 @@ def load_system_metadata(metadata_path):
         return json.load(f)
 
 
-def load_contaminant_data(downloads_dir, limit=None):
-    """Load all processed contaminant JSONs from downloads directory.
-
-    Returns:
-        tuple: (systems dict, contaminant_meta dict)
-            - systems: system_id -> {name, water_source, years: {year: {violations, contaminants}}}
-            - contaminant_meta: contaminant_name -> {mcl, mclg, units, category, categories}
-    """
-    print(f"Loading contaminant data from {downloads_dir}...")
-    systems = defaultdict(lambda: {"years": {}})
-    contaminant_meta = {}  # Deduplicated metadata
+def process_system_dir(dir_path):
+    """Worker function to process all JSONs in a single system directory."""
+    systems = {}  # Use a regular dict for pickling compatibility
+    contaminant_meta = {}
     file_count = 0
-    dir_count = 0
 
-    downloads_path = Path(downloads_dir)
-
-    # Use scandir for faster directory listing
     try:
-        dirs = list(os.scandir(downloads_path))
+        for file_entry in os.scandir(dir_path):
+            if not file_entry.name.endswith('.json') or not file_entry.name.startswith('TX'):
+                continue
+
+            try:
+                with open(file_entry.path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                system_id = data.get("system_id")
+                year = data.get("year")
+                if not system_id or not year:
+                    continue
+
+                if system_id not in systems:
+                    systems[system_id] = {"years": {}}
+
+                if data.get("system_name") and not systems[system_id].get("name"):
+                    systems[system_id]["name"] = data["system_name"]
+                if data.get("water_source") and not systems[system_id].get("water_source"):
+                    systems[system_id]["water_source"] = data["water_source"]
+
+                contaminants = data.get("contaminants", [])
+                year_data = {"violations": [], "contaminants": {}}
+
+                for c in contaminants:
+                    name = c.get("name", "").strip()
+                    if not name: continue
+                    clean_name = re.sub(r'\s+', ' ', name).strip()
+                    
+                    level = c.get("highest_level")
+                    level, dropped = apply_patch(system_id, year, clean_name, level)
+                    if dropped: continue
+
+                    # Use authoritative MCL if available, otherwise trust the report
+                    limit_config = CONTAMINANT_LIMITS.get(clean_name, {})
+                    mcl = limit_config.get("mcl", c.get("mcl"))
+                    mclg = limit_config.get("mclg", c.get("mclg"))
+                    units = limit_config.get("units", c.get("units"))
+
+                    year_data["contaminants"][clean_name] = level
+                    if clean_name not in contaminant_meta:
+                        contaminant_meta[clean_name] = {
+                            "mcl": mcl,
+                            "mclg": mclg,
+                            "units": units,
+                            "category": c.get("category"),
+                            "categories": categorize_contaminant(name)
+                        }
+
+                    is_violation = False
+                    if level is not None and mcl is not None:
+                        try:
+                            if level > mcl:
+                                is_violation = True
+                        except (TypeError, ValueError):
+                            pass
+                    
+                    # If we couldn't determine by level, fallback to raw flag
+                    # but only if it doesn't look like a false positive.
+                    if not is_violation and c.get("violation"):
+                        # If level <= mcl, it's likely a false positive from the scraper
+                        if level is not None and mcl is not None:
+                            try:
+                                if level <= mcl:
+                                    is_violation = False
+                                else:
+                                    is_violation = True
+                            except (TypeError, ValueError):
+                                is_violation = True
+                        else:
+                            is_violation = True
+
+                    if is_violation:
+                        year_data["violations"].append(clean_name)
+
+                systems[system_id]["years"][str(year)] = year_data
+                file_count += 1
+            except (json.JSONDecodeError, IOError):
+                continue
+    except OSError:
+        pass
+
+    return systems, contaminant_meta, file_count
+
+
+def load_contaminant_data(downloads_dir, limit=None):
+    """Load all processed contaminant JSONs using multiprocessing."""
+    print(f"Loading contaminant data from {downloads_dir}...")
+    
+    downloads_path = Path(downloads_dir)
+    try:
+        all_dirs = [d.path for d in os.scandir(downloads_path) if d.is_dir()]
     except OSError as e:
         print(f"Error scanning {downloads_path}: {e}")
         return {}, {}
 
-    total_dirs = len([d for d in dirs if d.is_dir()])
-    print(f"  Found {total_dirs} system directories")
+    if limit:
+        all_dirs = all_dirs[:limit]  # Simplistic limit for testing
 
-    for entry in dirs:
-        if not entry.is_dir():
-            continue
+    total_dirs = len(all_dirs)
+    print(f"  Processing {total_dirs} system directories using {multiprocessing.cpu_count()} cores...")
 
-        dir_count += 1
-        if dir_count % 1000 == 0:
-            print(f"  Scanning directory {dir_count}/{total_dirs} ({file_count} files loaded)...")
+    merged_systems = defaultdict(lambda: {"years": {}})
+    merged_meta = {}
+    total_files = 0
 
-        # Look for TX*.json files in this directory
-        try:
-            for file_entry in os.scandir(entry.path):
-                if not file_entry.name.endswith('.json'):
-                    continue
-                if not file_entry.name.startswith('TX'):
-                    continue
+    with multiprocessing.Pool() as pool:
+        for systems, meta, count in tqdm(pool.imap_unordered(process_system_dir, all_dirs), total=total_dirs, desc="Loading Data"):
+            total_files += count
+            
+            # Merge systems
+            for sid, sdata in systems.items():
+                if "name" in sdata and not merged_systems[sid].get("name"):
+                    merged_systems[sid]["name"] = sdata["name"]
+                if "water_source" in sdata and not merged_systems[sid].get("water_source"):
+                    merged_systems[sid]["water_source"] = sdata["water_source"]
+                if "years" in sdata:
+                    merged_systems[sid]["years"].update(sdata["years"])
+            
+            # Merge meta
+            for cname, cinfo in meta.items():
+                if cname not in merged_meta:
+                    merged_meta[cname] = cinfo
 
-                try:
-                    with open(file_entry.path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-
-                    system_id = data.get("system_id")
-                    year = data.get("year")
-
-                    if not system_id or not year:
-                        continue
-
-                    # Store system name if available
-                    if data.get("system_name") and not systems[system_id].get("name"):
-                        systems[system_id]["name"] = data["system_name"]
-
-                    # Store water source if available
-                    if data.get("water_source") and not systems[system_id].get("water_source"):
-                        systems[system_id]["water_source"] = data["water_source"]
-
-                    # Process contaminants
-                    contaminants = data.get("contaminants", [])
-                    year_data = {
-                        "violations": [],
-                        "contaminants": {}
-                    }
-
-                    for c in contaminants:
-                        name = c.get("name", "").strip()
-                        if not name:
-                            continue
-
-                        # Clean up the name
-                        clean_name = re.sub(r'\s+', ' ', name).strip()
-
-                        level = c.get("highest_level")
-                        level, dropped = apply_patch(system_id, year, clean_name, level)
-                        if dropped:
-                            continue
-
-                        # Store only level per instance (normalized)
-                        year_data["contaminants"][clean_name] = level
-
-                        # Store metadata once per contaminant name
-                        if clean_name not in contaminant_meta:
-                            contaminant_meta[clean_name] = {
-                                "mcl": c.get("mcl"),
-                                "mclg": c.get("mclg"),
-                                "units": c.get("units"),
-                                "category": c.get("category"),
-                                "categories": categorize_contaminant(name)
-                            }
-
-                        if c.get("violation"):
-                            year_data["violations"].append(clean_name)
-
-                    systems[system_id]["years"][str(year)] = year_data
-                    file_count += 1
-
-                    if limit and file_count >= limit:
-                        print(f"  Hit limit of {limit} files")
-                        return dict(systems), contaminant_meta
-
-                except (json.JSONDecodeError, IOError) as e:
-                    continue
-        except OSError:
-            continue
-
-    print(f"  Loaded {file_count} files for {len(systems)} systems")
-    return dict(systems), contaminant_meta
+    print(f"  Loaded {total_files} files for {len(merged_systems)} systems")
+    return dict(merged_systems), merged_meta
 
 
 def compute_violation_status(years_data, recent_threshold):
@@ -419,7 +455,7 @@ def build_dashboard_data(downloads_dir, metadata_path, output_path, limit=None):
     # Report file sizes
     map_size = os.path.getsize(map_path)
     details_size = os.path.getsize(details_path)
-    print(f"\nFile sizes:")
+    print("\nFile sizes:")
     print(f"  {map_path}: {map_size:,} bytes ({map_size/1024:.1f} KB)")
     print(f"  {details_path}: {details_size:,} bytes ({details_size/1024:.1f} KB)")
 
