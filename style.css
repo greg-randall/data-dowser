@@ -160,7 +160,6 @@ body {
 .checkbox-group input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    accent-color: #C9901A;
 }
 
 /* Sliders */
@@ -248,15 +247,23 @@ body {
 .toggle-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+}
+
+.toggle-group span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75em;
+    letter-spacing: 0.05em;
+    color: #CFC3A3;
+    text-transform: uppercase;
 }
 
 .toggle {
     position: relative;
-    width: 44px;
-    height: 24px;
+    width: 36px;
+    height: 20px;
     background: #3A2518;
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
 }
 
@@ -266,18 +273,18 @@ body {
 
 .toggle .slider {
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
     background: #6B5A3A;
     border-radius: 50%;
     transition: all 0.2s;
 }
 
 .toggle input:checked + .slider {
-    left: 22px;
-    background: #C9901A;
+    left: 19px;
+    background: #C44B22;
 }
 
 /* Map */
@@ -575,24 +582,26 @@ body {
 }
 
 .welcome-modal {
-    background: #2E2010;
-    border-radius: 12px;
+    background: #F2EEE3; /* Cream */
+    border-radius: 8px;
     max-width: 520px;
     width: 100%;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
     overflow: hidden;
+    color: #1A1208; /* Dark Brown */
 }
 
 .welcome-header {
-    background: linear-gradient(135deg, #C44B22 0%, #C9901A 100%);
+    background: #C44B22; /* Rust */
     padding: 24px;
     color: #fff;
+    text-align: center;
 }
 
 .welcome-header h2 {
     font-family: 'League Gothic', sans-serif;
     font-weight: 400;
-    font-size: 2em;
+    font-size: 42px;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     line-height: 0.9;
@@ -609,13 +618,13 @@ body {
 
 .welcome-body {
     padding: 24px;
+    font-family: 'Lora', serif;
 }
 
 .welcome-body p {
-    font-family: 'Lora', serif;
     margin-bottom: 16px;
     line-height: 1.6;
-    color: #CFC3A3;
+    color: #1A1208;
     font-size: 0.95em;
 }
 
@@ -624,7 +633,7 @@ body {
     justify-content: space-around;
     margin: 20px 0;
     padding: 16px;
-    background: #1A1208;
+    background: rgba(196, 75, 34, 0.05); /* Light rust tint */
     border-radius: 8px;
 }
 
@@ -634,15 +643,14 @@ body {
 
 .welcome-stat-value {
     font-family: 'Unbounded', sans-serif;
-    font-size: 1.4em;
+    font-size: 1.5em;
     font-weight: 700;
-    color: #C9901A;
+    color: #C44B22; /* Rust */
 }
 
 .welcome-stat-label {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7em;
-    letter-spacing: 0.1em;
+    font-size: 0.75em;
     text-transform: uppercase;
     color: #6B5A3A;
     margin-top: 4px;
@@ -654,6 +662,7 @@ body {
     margin: 16px 0;
     font-size: 0.8em;
     font-family: 'IBM Plex Mono', monospace;
+    color: #6B5A3A;
 }
 
 .welcome-legend-item {
@@ -668,16 +677,37 @@ body {
     border-radius: 50%;
 }
 
+.welcome-btn {
+    background: #C44B22; /* Rust */
+    color: #fff;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 4px;
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.welcome-btn:hover {
+    background: #C9901A; /* Gold */
+}
+
 .welcome-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #3A2518;
+    padding: 20px 24px 0 24px; /* Added 24px horizontal padding to match body */
+    border-top: 1px solid #CFC3A3;
 }
 
 .welcome-footer label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8em;
+    color: #6B5A3A;
+    cursor: pointer;
+}
     font-family: 'Lora', serif;
     font-size: 0.85em;
     color: #6B5A3A;
@@ -688,7 +718,6 @@ body {
 }
 
 .welcome-footer input[type="checkbox"] {
-    accent-color: #C9901A;
     width: 16px;
     height: 16px;
     cursor: pointer;
@@ -751,9 +780,67 @@ body {
 .contaminant-picker.hidden { display: none; }
 .contaminant-search,
 .search-container { position: relative; width: 100%; }
-.search-input { width: 100%; padding: 8px; background: #3A2518; border: 1px solid #6B5A3A; border-radius: 4px; color: #CFC3A3; font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; }
-.search-input:focus { outline: none; border-color: #C9901A; }
-.search-input::placeholder { color: #6B5A3A; }
+.search-input,
+.contaminant-search { 
+    width: 100%; 
+    padding: 8px; 
+    background: #D6CFB4; /* Caliche */
+    border: 1px solid #6B5A3A; 
+    border-radius: 4px; 
+    color: #1A1208; /* Dark brown for readability on light background */
+    font-family: 'IBM Plex Mono', monospace; 
+    font-size: 0.8em; 
+}
+.search-input:focus,
+.contaminant-search:focus { outline: none; border-color: #C9901A; }
+.search-input::placeholder,
+.contaminant-search::placeholder { color: #6B5A3A; opacity: 0.8; }
+
+.checkbox-group input[type="checkbox"],
+.welcome-footer input[type="checkbox"],
+body.leaderboard .controls input[type="checkbox"],
+.category-items input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: #D6CFB4; /* Caliche */
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #3A2518;
+    border-radius: 3px;
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.checkbox-group input[type="checkbox"]::before,
+.welcome-footer input[type="checkbox"]::before,
+body.leaderboard .controls input[type="checkbox"]::before,
+.category-items input[type="checkbox"]::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    transform: scale(0);
+    transition: 120ms transform ease-in-out;
+    background-color: #C9901A; /* Gold checkmark */
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.checkbox-group input[type="checkbox"]:checked,
+.welcome-footer input[type="checkbox"]:checked,
+body.leaderboard .controls input[type="checkbox"]:checked,
+.category-items input[type="checkbox"]:checked {
+    background-color: #1A1208; /* Dark background when checked */
+    border-color: #C9901A; /* Gold border when checked */
+}
+
+.checkbox-group input[type="checkbox"]:checked::before,
+.welcome-footer input[type="checkbox"]:checked::before,
+body.leaderboard .controls input[type="checkbox"]:checked::before,
+.category-items input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
 
 .search-results {
     position: absolute;
@@ -786,7 +873,7 @@ body {
     display: block;
     font-size: 0.9em;
     font-weight: 600;
-    color: #f5f5f5;
+    color: #C9901A; /* Gold theme color */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -804,7 +891,13 @@ body {
 .category-header.expanded .chevron { transform: rotate(90deg); }
 .category-items { padding-left: 20px; display: none; }
 .category-items.expanded { display: block; }
-.category-items label { display: block; padding: 3px 0; font-size: 0.8em; }
+.category-items label { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px;
+    padding: 3px 0; 
+    font-size: 0.8em; 
+}
 .picker-footer { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #3A2518; }
 .picker-btn { padding: 4px 10px; background: #3A2518; border: 1px solid #6B5A3A; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; color: #6B5A3A; cursor: pointer; font-size: 0.75em; letter-spacing: 0.05em; }
 .picker-btn:hover { color: #C9901A; border-color: #C9901A; }
@@ -872,8 +965,8 @@ body.leaderboard .controls {
     flex-wrap: wrap;
 }
 body.leaderboard .controls input[type="text"] {
-    background: #3A2518;
-    color: #CFC3A3;
+    background: #D6CFB4; /* Caliche */
+    color: #1A1208; /* Dark brown */
     border: 1px solid #6B5A3A;
     padding: 8px 12px;
     border-radius: 4px;
@@ -887,6 +980,7 @@ body.leaderboard .controls input[type="text"]:focus {
 }
 body.leaderboard .controls input[type="text"]::placeholder {
     color: #6B5A3A;
+    opacity: 0.8;
 }
 body.leaderboard .controls label {
     font-size: 0.75em;
@@ -901,7 +995,6 @@ body.leaderboard .controls label {
 body.leaderboard .controls input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    accent-color: #C9901A;
 }
 body.leaderboard .stats {
     font-size: 0.75em;

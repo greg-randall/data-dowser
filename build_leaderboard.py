@@ -13,6 +13,7 @@ from pathlib import Path
 from titlecase import titlecase
 
 from data_patches import apply_patch
+from utils import smart_title
 
 CSV_PATH = Path("raw-data/texas_water_quality.csv")
 OUT_PATH = Path("leaderboard.json")
@@ -22,25 +23,6 @@ SEVERITY_WEIGHT = 0.7
 IMPACT_WEIGHT = 0.3
 
 CITY_RE = re.compile(r"^\s*(?:CITY|TOWN|VILLAGE)\s+OF\s+(.+?)\s*$", re.IGNORECASE)
-
-
-def acronym_callback(word, **kwargs):
-    # Specific water industry acronyms to keep capped
-    acronyms = {"WSC", "WCID", "MUD", "SUD", "FWSD", "PWS", "ISD", "VFD"}
-    if word.upper() in acronyms:
-        return word.upper()
-    # If it's a single letter like 'A', 'B', etc. (common in unit names)
-    if len(word) == 1 and word.isupper():
-        return word
-    return None
-
-
-def smart_title(text):
-    if not text:
-        return ""
-    # titlecase handles prepositions; callback handles technical acronyms
-    return titlecase(text, callback=acronym_callback)
-
 
 def extract_city(system_name):
     if not system_name:

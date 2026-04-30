@@ -34,7 +34,7 @@ This script aggregates the flat CSV into a worst-to-best ranking of water system
 *   **`severity_sum`**: sum of `highest_level / mcl` across all violations. One reading at 100× the limit outweighs fifty at 1.1×.
 *   **`avg_severity`**: average exceedance per violation.
 *   **`impact_score`**: `population × severity_sum` — total human exposure (null when population is unknown).
-*   **`composite_score`**: `0.7 × log-norm(severity) + 0.3 × log-norm(impact)` — a balanced "bad and affects people" score, log-scaled so a single extreme reading doesn't dominate the ranking. Weights are configurable in `build_leaderboard.py`.
+*   **`composite_score`**: `(0.7 × log-norm(severity) + 0.3 × log-norm(impact)) * 100` — a balanced "bad and affects people" score (0-100), log-scaled so a single extreme reading doesn't dominate the ranking. Weights are configurable in `build_leaderboard.py`.
 
 Output is `leaderboard.json` and a standalone `leaderboard.html` with a sortable, filterable table. Serve the page with `python3 -m http.server` and open it alongside the main dashboard.
 

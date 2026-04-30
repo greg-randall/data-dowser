@@ -17,6 +17,7 @@ import yaml
 from tqdm import tqdm
 
 from data_patches import apply_patch
+from utils import smart_title
 
 
 def load_contaminant_categories():
@@ -315,8 +316,8 @@ def build_dashboard_data(downloads_dir, metadata_path, output_path, limit=None):
         # Build details entry
         name = meta.get("folder_name", "").replace(f"{system_id}_", "").replace("_", " ")
         detail_entry = {
-            "n": name,  # name
-            "c": meta.get("meta", {}).get("county", "Unknown"),  # county
+            "n": smart_title(name),  # name
+            "c": smart_title(meta.get("meta", {}).get("county", "Unknown")),  # county
             "t": meta.get("meta", {}).get("system_type", ""),  # system_type
         }
         if coord_source and coord_source != "source_water_inventory":
@@ -330,7 +331,7 @@ def build_dashboard_data(downloads_dir, metadata_path, output_path, limit=None):
 
             # Use name from contaminant data if better
             if cdata.get("name"):
-                detail_entry["n"] = cdata["name"]
+                detail_entry["n"] = smart_title(cdata["name"])
 
             if cdata.get("water_source"):
                 detail_entry["ws"] = cdata["water_source"]  # water_source
