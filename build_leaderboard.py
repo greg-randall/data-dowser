@@ -173,12 +173,21 @@ def main():
             if not is_violation:
                 continue
 
-            level, dropped = apply_patch(sid, row.get("year"), contaminant_name, level)
+            level, dropped, patch_note = apply_patch(sid, row.get("year"), contaminant_name, level)
             if dropped:
                 continue
 
             total_violations += 1
             s["violation_count"] += 1
+            
+            if patch_note:
+                if "patch_notes" not in s:
+                    s["patch_notes"] = []
+                s["patch_notes"].append({
+                    "year": int(row["year"]) if row["year"] else None,
+                    "contaminant": contaminant_name,
+                    "note": patch_note
+                })
 
             mcl = to_float(row["mcl"])
             if level is None or mcl is None or mcl <= 0:

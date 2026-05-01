@@ -28,9 +28,13 @@
             </div>
             <div class="welcome-body">
                 <p>
-                    Every year, Texas water utilities publish quality reports. The state posts them
-                    as Word documents behind a search form that only shows one system at a time.
-                    We downloaded all 100,000+ reports, extracted the data, and put it on a map.
+                    Every year, Texas’s <b>almost 15,000 water systems</b> are required to report their quality data. The state publishes these as over <b>225,000 individual Word documents</b> spanning <b>15 years</b>, buried behind a search form that only shows one system at a time.
+                </p>
+                <p>
+                    We’ve extracted that raw data and put it all in one place. In these reports, you will find <b>staggering numbers</b>—from industrial runoff to radioactive isotopes—recorded at levels tens or even hundreds of times beyond federal safety limits. 
+                </p>
+                <p>
+                    This tool does not interpret the "why"; it simply makes the state’s own records searchable and visual for the first time.
                 </p>
 
                 <div class="welcome-stats">
@@ -47,12 +51,6 @@
                         <div class="welcome-stat-label">people affected</div>
                     </div>
                 </div>
-
-                <p>
-                    Click any marker to see contaminants detected, whether levels exceeded
-                    federal limits, and how they've changed over time. Use the sidebar filters
-                    to find specific issues.
-                </p>
 
                 <div class="welcome-legend">
                     <div class="welcome-legend-item">
@@ -101,16 +99,6 @@
                     </label>
                     <span style="font-weight: 400; color: #CFC3A3; font-size: 0.8em; letter-spacing: 0.05em;">VIOLATIONS ONLY</span>
                 </div>
-
-                <div class="toggle-group" style="margin-top: 12px; margin-bottom: 0;">
-                    <label class="toggle">
-                        <input type="checkbox" id="match-mode">
-                        <span class="slider"></span>
-                    </label>
-                    <span id="match-mode-label" style="font-weight: 400; color: #CFC3A3; font-size: 0.8em; letter-spacing: 0.05em;">MATCH: ANY</span>
-                </div>
-
-                <button id="reset-filters" class="picker-btn" style="width: 100%; margin-top: 15px; border-color: #C44B22; color: #C44B22;">RESET ALL FILTERS</button>
             </div>
 
             <div class="filter-section">
@@ -138,16 +126,27 @@
                     </label>
                 </div>
 
-                <div class="specific-contaminant-section" style="margin-top: 16px; border-top: 1px solid #3A2518; padding-top: 16px;">
-                    <h3 style="font-size: 0.8em; opacity: 0.8; margin-bottom: 8px;">Specific Contaminants</h3>
+                <!-- Specific Contaminants Accordion -->
+                <div class="accordion-header" id="header-specific">
+                    <span class="chevron">▶</span> Specific Contaminants
+                </div>
+                <div class="accordion-content" id="content-specific">
+                    <div class="toggle-group" style="margin-bottom: 8px;">
+                        <label class="toggle">
+                            <input type="checkbox" id="match-mode">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-weight: 400; color: #CFC3A3; font-size: 0.8em; letter-spacing: 0.05em;">STRICT MATCH (ALL)</span>
+                    </div>
+                    
+                    <div id="selected-count" style="font-size: 0.75em; color: #C9901A; margin-bottom: 12px; letter-spacing: 0.05em; font-family: 'IBM Plex Mono', monospace;">0 selected</div>
+
                     <div class="contaminant-picker">
                         <input type="text" id="contaminant-search" placeholder="Search for 'arsenic', 'lead', etc..." class="contaminant-search">
                         <div id="contaminant-categories" style="margin-top: 8px;"></div>
-                        <div class="picker-footer">
-                            <button type="button" class="picker-btn" id="clear-specific-btn">Clear Selection</button>
-                            <span id="selected-count">0 selected</span>
-                        </div>
                     </div>
+
+                    <button id="reset-filters" class="picker-btn" style="width: 100%; margin-top: 15px; border-color: #C44B22; color: #C44B22;">RESET ALL FILTERS</button>
                 </div>
             </div>
 
@@ -172,6 +171,10 @@
                         <input type="range" id="population-min" min="0" max="100000" step="1000" value="0">
                         <input type="range" id="population-max" min="0" max="100000" step="1000" value="100000">
                     </div>
+                </div>
+
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #3A2518;">
+                    <a href="leaderboard.html" class="picker-btn" style="text-decoration: none; display: inline-block; width: 100%; text-align: center;">View Leaderboard</a>
                 </div>
             </div>
         </aside>
@@ -367,8 +370,16 @@
                     checkbox.value = contaminantName;
                     checkbox.checked = selectedSpecificContaminants.has(contaminantName);
                     checkbox.onchange = () => {
-                        if (checkbox.checked) selectedSpecificContaminants.add(contaminantName);
-                        else selectedSpecificContaminants.delete(contaminantName);
+                        if (checkbox.checked) {
+                            selectedSpecificContaminants.add(contaminantName);
+                            
+                            // UX: When focusing on a specific chemical, auto-enable violations 
+                            // and clear the broad categories to avoid confusion
+                            document.getElementById('violations-only').checked = true;
+                            document.querySelectorAll('.checkbox-group input[id^="filter-"]').forEach(cb => cb.checked = false);
+                        } else {
+                            selectedSpecificContaminants.delete(contaminantName);
+                        }
                         updateSelectedCount();
                         renderMap();
                     };
@@ -472,9 +483,13 @@
         // Update stats display
         function updateStats() {
             if (!mapData || !mapData.stats) return;
-            document.getElementById('stat-systems').textContent = mapData.stats.total_systems?.toLocaleString() || '--';
-            document.getElementById('stat-violations').textContent = mapData.stats.systems_with_violations?.toLocaleString() || '--';
-            document.getElementById('stat-population').textContent = formatPopulation(mapData.stats.population_affected);
+            const sysEl = document.getElementById('stat-systems');
+            const violEl = document.getElementById('stat-violations');
+            const popEl = document.getElementById('stat-population');
+            
+            if (sysEl) sysEl.textContent = mapData.stats.total_systems?.toLocaleString() || '--';
+            if (violEl) violEl.textContent = mapData.stats.systems_with_violations?.toLocaleString() || '--';
+            if (popEl) popEl.textContent = formatPopulation(mapData.stats.population_affected);
         }
 
         function formatPopulation(pop) {
@@ -487,7 +502,6 @@
         // Get current filter settings
         function getFilters() {
             const matchMode = document.getElementById('match-mode').checked ? 'ALL' : 'ANY';
-            document.getElementById('match-mode-label').textContent = 'MATCH: ' + matchMode;
 
             return {
                 categories: {
@@ -869,7 +883,7 @@
 
         function updatePopRangeFill() {
             const minEl = document.getElementById('population-min'), maxEl = document.getElementById('population-max'), fill = document.getElementById('pop-range-fill');
-            const min = parseInt(minEl.min), max = parseInt(minEl.max), minVal = parseInt(minEl.value), maxVal = parseInt(maxEl.value);
+            const min = parseInt(minEl.min), max = parseInt(maxEl.max), minVal = parseInt(minEl.value), maxVal = parseInt(maxEl.value);
             const l = ((minVal - min) / (max - min)) * 100, w = ((maxVal - min) / (max - min)) * 100 - l;
             fill.style.left = l + '%'; fill.style.width = w + '%';
         }
@@ -880,7 +894,7 @@
         };
         document.getElementById('population-max').oninput = (e) => {
             const minEl = document.getElementById('population-min'); if (parseInt(e.target.value) < parseInt(minEl.value)) e.target.value = minEl.value;
-            document.getElementById('pop-max-val').textContent = parseInt(e.target.value) >= 100000 ? '100k+' : (Math.round(e.target.value/1000)+'k');
+            document.getElementById('pop-min-val').textContent = parseInt(e.target.value) >= 100000 ? '100k+' : (Math.round(e.target.value/1000)+'k');
             updatePopRangeFill(); renderMap();
         };
 
@@ -918,14 +932,6 @@
             }
         };
 
-        const clearSpecificBtn = document.getElementById('clear-specific-btn');
-        if (clearSpecificBtn) {
-            clearSpecificBtn.onclick = () => {
-                document.querySelectorAll('#contaminant-categories input').forEach(cb => cb.checked = false);
-                selectedSpecificContaminants.clear(); updateSelectedCount(); renderMap();
-            };
-        }
-
         // Reset filters logic
         document.getElementById('reset-filters').onclick = () => {
             document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => cb.checked = true);
@@ -954,6 +960,12 @@
             renderMap();
         };
 
+        // Accordion toggle logic
+        document.getElementById('header-specific').onclick = function() {
+            this.classList.toggle('expanded');
+            document.getElementById('content-specific').classList.toggle('expanded');
+        };
+
         // Welcome modal logic
         function initWelcomeModal() {
             const m = document.getElementById('welcome-modal');
@@ -961,7 +973,13 @@
             m.onclick = (e) => { if (e.target === m) { if (document.getElementById('welcome-dont-show').checked) localStorage.setItem('hideWelcome', 'true'); m.classList.add('hidden'); } };
             document.onkeydown = (e) => { if (e.key === 'Escape') m.classList.add('hidden'); };
         }
-        function showWelcomeModal() { if (localStorage.getItem('hideWelcome') !== 'true') document.getElementById('welcome-modal').classList.remove('hidden'); }
+        function showWelcomeModal() { 
+            const params = new URLSearchParams(location.search);
+            if (params.get('pop') === '0') return;
+            if (localStorage.getItem('hideWelcome') !== 'true') {
+                document.getElementById('welcome-modal').classList.remove('hidden'); 
+            }
+        }
 
         initWelcomeModal(); initMap(); loadMapData();
     </script>

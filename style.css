@@ -1,5 +1,50 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=League+Gothic&family=Lora:wght@400;600&family=Unbounded:wght@700&display=swap');
 
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #1A1208;
+}
+::-webkit-scrollbar-thumb {
+    background: #3A2518;
+    border-radius: 4px;
+    border: 1px solid #6B5A3A;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #6B5A3A;
+}
+
+/* Firefox scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #3A2518 #1A1208;
+}
+
+/* Leaflet Zoom Controls */
+.leaflet-bar {
+    border: 1px solid #6B5A3A !important;
+    box-shadow: none !important;
+}
+.leaflet-bar a {
+    background-color: #2E2010 !important;
+    color: #CFC3A3 !important;
+    border-bottom: 1px solid #6B5A3A !important;
+}
+.leaflet-bar a:hover {
+    background-color: #3A2518 !important;
+    color: #C9901A !important;
+}
+.leaflet-bar a.leaflet-disabled {
+    background-color: #1A1208 !important;
+    color: #3A2518 !important;
+}
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-weight: bold !important;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -593,7 +638,7 @@ body {
 
 .welcome-header {
     background: #C44B22; /* Rust */
-    padding: 24px;
+    padding: 16px 24px; /* Reduced vertical padding */
     color: #fff;
     text-align: center;
 }
@@ -601,29 +646,29 @@ body {
 .welcome-header h2 {
     font-family: 'League Gothic', sans-serif;
     font-weight: 400;
-    font-size: 42px;
+    font-size: 38px; /* Slightly smaller */
     text-transform: uppercase;
     letter-spacing: 0.03em;
     line-height: 0.9;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .welcome-header p {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.8em;
+    font-size: 0.75em;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     opacity: 0.85;
 }
 
 .welcome-body {
-    padding: 24px;
+    padding: 16px 24px; /* Reduced vertical padding */
     font-family: 'Lora', serif;
 }
 
 .welcome-body p {
-    margin-bottom: 16px;
-    line-height: 1.6;
+    margin-bottom: 12px; /* Reduced margin */
+    line-height: 1.5; /* Slightly tighter line height */
     color: #1A1208;
     font-size: 0.95em;
 }
@@ -631,8 +676,8 @@ body {
 .welcome-stats {
     display: flex;
     justify-content: space-around;
-    margin: 20px 0;
-    padding: 16px;
+    margin: 12px 0; /* Reduced margin */
+    padding: 12px;
     background: rgba(196, 75, 34, 0.05); /* Light rust tint */
     border-radius: 8px;
 }
@@ -677,40 +722,19 @@ body {
     border-radius: 50%;
 }
 
-.welcome-btn {
-    background: #C44B22; /* Rust */
-    color: #fff;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 4px;
-    font-family: 'Unbounded', sans-serif;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.welcome-btn:hover {
-    background: #C9901A; /* Gold */
-}
-
 .welcome-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 20px;
-    padding: 20px 24px 0 24px; /* Added 24px horizontal padding to match body */
+    margin-top: 10px; /* Reduced from 20 */
+    padding: 12px 24px 16px 24px; /* Reduced vertical padding */
     border-top: 1px solid #CFC3A3;
 }
 
 .welcome-footer label {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.8em;
-    color: #6B5A3A;
-    cursor: pointer;
-}
-    font-family: 'Lora', serif;
     font-size: 0.85em;
-    color: #6B5A3A;
+    color: #3A2518; /* Darker brown for better contrast on cream */
     display: flex;
     align-items: center;
     gap: 10px;
@@ -886,9 +910,38 @@ body.leaderboard .controls input[type="checkbox"]:checked::before,
     margin-top: 2px;
 }
 .category-group { margin-bottom: 8px; }
-.category-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 8px; background: #3A2518; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75em; letter-spacing: 0.08em; text-transform: uppercase; color: #C9901A; }
+.accordion-header,
+.category-header { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    cursor: pointer; 
+    padding: 8px 12px; 
+    background: #2E2010; 
+    border-radius: 4px; 
+    font-family: 'IBM Plex Mono', monospace; 
+    font-size: 0.75em; 
+    letter-spacing: 0.08em; 
+    text-transform: uppercase; 
+    color: #C9901A; 
+    border: 1px solid #3A2518;
+    margin-top: 10px;
+}
+
+.category-header {
+    font-size: 0.7em; /* Slightly smaller as requested */
+    padding: 6px 10px;
+    background: #241a0d;
+}
+
+.accordion-header .chevron,
 .category-header .chevron { transition: transform 0.2s; font-size: 0.7em; }
+
+.accordion-header.expanded .chevron,
 .category-header.expanded .chevron { transform: rotate(90deg); }
+
+.accordion-content { display: none; padding: 15px 5px; border-left: 1px solid #3A2518; margin-left: 5px; }
+.accordion-content.expanded { display: block; }
 .category-items { padding-left: 20px; display: none; }
 .category-items.expanded { display: block; }
 .category-items label { 
@@ -1177,20 +1230,19 @@ body.leaderboard {
     border-bottom: 1px solid #3A2518;
     padding-bottom: 10px;
 }
-.popover-section { margin-bottom: 24px; }
+.popover-section { margin-bottom: 12px; }
 
 .popover-section h3 {
     font-family: 'League Gothic', sans-serif;
-    font-size: 1.6em;
+    font-size: 1.5em; /* Slightly smaller */
     color: #C9901A;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     text-transform: uppercase;
     letter-spacing: 0.02em;
 }
 
 .popover-content p,
-.popover-section p,
-.welcome-footer label {
+.popover-section p {
     font-family: 'Lora', serif;
     font-size: 0.9em;
     line-height: 1.6;

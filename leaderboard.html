@@ -9,61 +9,82 @@
 <body class="leaderboard">
 
 <div class="popover-overlay" id="popoverOverlay">
-    <div class="popover-content">
-        <button class="popover-close" id="popoverClose">&times;</button>
-        <h2>About the Leaderboard</h2>
-        
-        <p style="margin-bottom: 20px;">
-            This list ranks public water systems based on violations of mandated legal limits, known as <b>Maximum Contaminant Levels (MCLs)</b>.
-        </p>
-        <p class="popover-instruction">
-            Click any system name to open its full violation history on the map.
-        </p>
-
-        <div class="popover-section">
-            <h3>Severity</h3>
-            <p>
-                The cumulative "toxicity load" since 2010. It is the sum of every violation, 
-                measured by how many times a contaminant exceeded its official MCL.
-            </p>
-            <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
-                Example: In 2014, Silver Creek had 345 units of Radium where the limit is 5 (345 / 5 = 69x the limit). Combined with all other violations, they reached a total Severity of 360.21.
-            </p>
+    <!-- About Modal -->
+    <div class="welcome-modal" id="aboutModal">
+        <div class="welcome-header">
+            <button class="popover-close" id="popoverClose" style="color: white; top: 10px; right: 10px;">&times;</button>
+            <h2>About the Leaderboard</h2>
+            <p>How we calculate severity and risk</p>
         </div>
-
-
-        <div class="popover-section">
-            <h3>Yearly Severity</h3>
-            <p>
-                Total severity divided by years active. This lets us compare a system with only two years of data directly to one with fifteen.
+        <div class="welcome-body" style="padding: 24px; color: #1A1208;">
+            <p style="margin-bottom: 12px;">
+                This leaderboard indexes the state’s <b>almost 15,000 water systems</b> by their own reported violation records across <b>15 years</b> and <b>225,000 source documents</b>.
             </p>
+            <p style="margin-bottom: 12px;">
+                In these raw reports, you will find <b>extreme outliers</b>—values appearing at 100x or even 1,000x the legal safety limit. We are not analyzing the health or environmental implications; we are simply sorting the systems by the weight of their own reported data. 
+            </p>
+            <p class="popover-instruction" style="color: #6B5A3A !important; margin-bottom: 12px;">
+                Click any system name to open its full violation history on the map.
+            </p>
+
+            <div class="popover-section">
+                <h3>Severity</h3>
+                <p style="color: #1A1208;">
+                    The cumulative "severity load" since 2010. It is the sum of every violation, 
+                    measured by how many times a contaminant exceeded its official MCL.
+                </p>
+                <p style="margin-top: 4px; font-size: 0.85em; color: #6B5A3A;">
+                    Example: In 2014, Silver Creek had 345 units of Radium where the limit is 5 (345 / 5 = 69x the limit). Combined with all other violations, they reached a total Severity of 360.21.
+                </p>
+            </div>
+
+            <div class="popover-section">
+                <h3>Yearly Severity</h3>
+                <p style="color: #1A1208;">
+                    Total severity divided by years active. This lets us compare a system with only two years of data directly to one with fifteen.
+                </p>
+            </div>
+
+            <div class="popover-section">
+                <h3>Community Risk</h3>
+                <p style="color: #1A1208;">
+                    A rating from 0–100 that blends <b>Severity (70%)</b> and <b>Population (30%)</b>. 
+                    We weight Severity heavily so that small towns with dangerous water aren't buried by the sheer headcount of big cities.
+                </p>
+                <p style="margin-top: 4px; font-size: 0.85em; color: #6B5A3A;">
+                    <i>* Systems with an unknown population are ranked by Severity only.</i>
+                </p>
+            </div>
+
+            <div class="popover-section" style="margin-bottom: 0;">
+                <h3>Data Integrity</h3>
+                <p style="color: #1A1208;">
+                    We fixed several obvious typos (like values 1,000x higher than physically possible) from raw state data. 
+                    Entries with corrected data are marked with a <span style="color: #C44B22;">ⓘ</span> icon.
+                </p>
+            </div>
         </div>
-
-        <div class="popover-section">
-            <h3>Community Risk</h3>
-            <p>
-                A rating from 0–100 that blends <b>Severity (70%)</b> and <b>Population (30%)</b>. 
-                We weight Severity heavily so that small towns with dangerous water aren't buried by the sheer headcount of big cities.
-            </p>
-            <p style="margin-top: 8px; font-size: 0.85em; color: #6B5A3A;">
-                <i>* Systems with an unknown population are ranked by Severity only.</i>
-            </p>
-        </div>
-
-
-        <div class="popover-section">
-            <h3>Data Integrity</h3>
-            <p>
-                We fixed one obvious typo from 2016 (Fayette County) that was 4,500x higher than any other year. Everything else is raw state data.
-            </p>
-        </div>
-
         <div class="welcome-footer">
             <label>
                 <input type="checkbox" id="popoverDontShow">
                 Don't show this again
             </label>
             <button class="welcome-btn" id="popoverGotIt">Got it</button>
+        </div>
+    </div>
+
+    <!-- Patch Note Detail Modal -->
+    <div class="welcome-modal hidden" id="patchModal" style="max-width: 400px;">
+        <div class="welcome-header" style="background: #3A2518;">
+            <button class="popover-close" id="patchClose" style="color: white; top: 10px; right: 10px;">&times;</button>
+            <h2 style="font-size: 24px;">Data Correction</h2>
+            <p id="patch-title">System Correction</p>
+        </div>
+        <div class="welcome-body" style="padding: 24px;">
+            <p id="patch-note-text" style="font-size: 0.9em; line-height: 1.5; color: #1A1208;"></p>
+            <div style="margin-top: 15px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75em; color: #6B5A3A; border-top: 1px solid #CFC3A3; padding-top: 10px;">
+                We preserve the "Violation" signal but remove impossible spikes that would skew statewide rankings.
+            </div>
         </div>
     </div>
 </div>
@@ -97,10 +118,10 @@
             <th data-key="county" title="County where the system is located">County</th>
             <th data-key="population" class="num" title="Total population served by this system">Pop.</th>
             <th data-key="active_years_count" class="num" title="Number of years (out of 15) this system has reported data">Years</th>
-            <th data-key="severity_sum" class="num" title="Total Toxicity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity</th>
-            <th data-key="annual_severity" class="num" title="Average yearly toxicity: total severity divided by years active.">Yearly Severity</th>
+            <th data-key="severity_sum" class="num" title="Total Severity Load: 1.0 is the legal limit. 100.0 means the water was 100x the legal limit across all violations.">Severity</th>
+            <th data-key="annual_severity" class="num" title="Average yearly severity: total severity divided by years active.">Yearly Severity</th>
             <th data-key="composite_score" class="num" title="Risk rating (0-100): 70% Severity, 30% Population Impact">Community Risk</th>
-            <th data-key="_worst_sev" title="The single most toxic test result recorded: how many times the legal limit it reached.">Worst Violation</th>
+            <th data-key="_worst_sev" title="The single most severe test result recorded: how many times the legal limit it reached.">Worst Violation</th>
         </tr>
     </thead>
     <tbody id="tb"></tbody>
@@ -125,16 +146,27 @@ const popoverOverlay = document.getElementById("popoverOverlay");
 const popoverClose = document.getElementById("popoverClose");
 const popoverGotIt = document.getElementById("popoverGotIt");
 const popoverDontShow = document.getElementById("popoverDontShow");
+const patchClose = document.getElementById("patchClose");
 
 function closePopover() {
     if (popoverDontShow.checked) {
         localStorage.setItem("hideLeaderboardExplain", "true");
     }
     popoverOverlay.classList.remove("active");
+    // Reset modal visibility for next time
+    setTimeout(() => {
+        document.getElementById("aboutModal").classList.remove("hidden");
+        document.getElementById("patchModal").classList.add("hidden");
+    }, 200);
 }
 
-explainBtn.onclick = () => popoverOverlay.classList.add("active");
+explainBtn.onclick = () => {
+    document.getElementById("aboutModal").classList.remove("hidden");
+    document.getElementById("patchModal").classList.add("hidden");
+    popoverOverlay.classList.add("active");
+};
 popoverClose.onclick = closePopover;
+patchClose.onclick = closePopover;
 popoverGotIt.onclick = closePopover;
 popoverOverlay.onclick = (e) => { if (e.target === popoverOverlay) closePopover(); };
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopover(); });
@@ -204,10 +236,10 @@ function render() {
         const nameEsc = (s.system_name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         const hasCoords = s.latitude !== null && s.longitude !== null;
         const sidCell = hasCoords
-            ? `<a class="sid-link" href="index.html?system=${sidEnc}${yearParam}" title="Open ${s.system_id} on the map">${s.system_id}</a>`
+            ? `<a class="sid-link" href="index.html?system=${sidEnc}${yearParam}&pop=0" title="Open ${s.system_id} on the map">${s.system_id}</a>`
             : `<span class="no-map" title="No coordinates — this system has no map marker">${s.system_id}</span>`;
         const nameCell = hasCoords
-            ? `<a class="name-link" href="index.html?system=${sidEnc}${yearParam}">${nameEsc}</a>`
+            ? `<a class="name-link" href="index.html?system=${sidEnc}${yearParam}&pop=0">${nameEsc}</a>`
             : `<span class="no-map">${nameEsc}</span><span class="no-map-tag" title="TCEQ has no coordinates for this system">no map</span>`;
         
         const explainer = s.explainer ? `<div class="explainer-text">${s.explainer}</div>` : "";
@@ -219,9 +251,17 @@ function render() {
         const worstLabel = w ? `<b>${fmt(w.severity, 1)}x</b> ${w.contaminant}` : "—";
         const worstDetail = w ? `<div class="worst">${w.year ?? ""} · ${fmt(w.level)} ${w.units} / MCL ${fmt(w.mcl)}</div>` : "";
 
+        let patchIcon = "";
+        if (s.patch_notes && s.patch_notes.length > 0) {
+            patchIcon = `<span class="patch-trigger" style="color: #C44B22; cursor: help; margin-left: 4px; font-size: 1.1em;" title="Click to see data correction details">ⓘ</span>`;
+        }
+
         tr.innerHTML = `
             <td>
-                ${nameCell}
+                <div style="display: flex; align-items: flex-start;">
+                    ${nameCell}
+                    ${patchIcon}
+                </div>
                 <div class="sid" style="font-size: 0.8em; color: #6B5A3A; margin-top: 2px;">${sidCell}</div>
                 ${explainer}
             </td>
@@ -237,6 +277,25 @@ function render() {
         frag.appendChild(tr);
     }
     tb.appendChild(frag);
+    
+    // Add click handlers for patch icons
+    document.querySelectorAll(".patch-trigger").forEach((el, index) => {
+        el.onclick = (e) => {
+            e.stopPropagation();
+            const s = FILTERED[index];
+            if (!s || !s.patch_notes) return;
+            
+            document.getElementById("patch-title").textContent = s.system_name;
+            document.getElementById("patch-note-text").textContent = s.patch_notes.map(n => 
+                `[${n.year} ${n.contaminant}]: ${n.note}`
+            ).join("\n\n");
+            
+            document.getElementById("aboutModal").classList.add("hidden");
+            document.getElementById("patchModal").classList.remove("hidden");
+            popoverOverlay.classList.add("active");
+        };
+    });
+
     empty.hidden = FILTERED.length > 0;
     
     const zeroCount = ALL.filter(s => s.violation_count === 0).length;
