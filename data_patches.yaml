@@ -1,0 +1,69 @@
+# Data Patches for Water Quality Data
+# Used to correct known data-entry errors in source TCEQ reports.
+# "action" can be a number (to replace the value) or "drop" (to skip the row).
+
+- system_id: "TX0750044"
+  year: 2016
+  contaminant: "Arsenic"
+  action: 22.0
+  note: >
+    The original report listed 45,262 ppb—a level that would be immediately fatal. 
+    Surrounding years show ~20 ppb, indicating a massive data-entry typo. 
+    We capped this at 22 ppb to preserve the violation signal while removing the impossible spike.
+
+- system_id: "TX1820001"
+  year: 2020
+  contaminant: "Chlorite"
+  action: 0.705
+  note: >
+    The source report lists 705 ppm, but also marks 'Violation: N'. 
+    Since the limit is 1.0 ppm, 705 is physically impossible for drinking water. 
+    This is a common unit error where 705 ppb (0.705 ppm) was entered as ppm.
+
+- system_id: "TX1820069"
+  year: 2021
+  contaminant: "Chlorite"
+  action: 0.658
+  note: >
+    Unit Error: Source lists 658 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 658 ppb (0.658 ppm).
+
+- system_id: "TX2350002"
+  year: 2024
+  contaminant: "Chlorite"
+  action: 0.440
+  note: >
+    Unit Error: Source lists 440 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 440 ppb (0.440 ppm).
+
+- system_id: "TX0540015"
+  year: 2021
+  contaminant: "Chlorite"
+  action: 0.304
+  note: >
+    Unit Error: Source lists 304 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 304 ppb (0.304 ppm).
+
+- system_id: "TX1080001"
+  year: 2021
+  contaminant: "Chlorite"
+  action: 0.286
+  note: >
+    Unit Error: Source lists 286 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 286 ppb (0.286 ppm).
+
+- system_id: "TX1080003"
+  year: 2021
+  contaminant: "Chlorite"
+  action: 0.132
+  note: >
+    Unit Error: Source lists 132 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 132 ppb (0.132 ppm).
+
+- system_id: "TX1440001"
+  year: 2021
+  contaminant: "Chlorite"
+  action: 0.0299
+  note: >
+    Unit Error: Source lists 29.9 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 29.9 ppb (0.0299 ppm).
