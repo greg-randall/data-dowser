@@ -1233,6 +1233,11 @@ body.leaderboard {
 }
 .popover-section { margin-bottom: 12px; }
 
+#allPatchesBody::-webkit-scrollbar-track { background: #E0D8C8; }
+#allPatchesBody::-webkit-scrollbar-thumb { background: #9A8060; border-radius: 4px; border: none; }
+#allPatchesBody::-webkit-scrollbar-thumb:hover { background: #6B5A3A; }
+#allPatchesBody { scrollbar-color: #9A8060 #E0D8C8; }
+
 .popover-section h3 {
     font-family: 'League Gothic', sans-serif;
     font-size: 1.5em; /* Slightly smaller */

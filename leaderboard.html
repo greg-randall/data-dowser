@@ -207,10 +207,10 @@ allPatchesBtn.onclick = async () => {
             const data = await resp.json();
             allPatchesList.innerHTML = data.map(p => {
                 const sys = ALL.find(x => x.system_id === p.system_id);
-                const nameLabel = sys ? ` · <span style="color:#3A2518;">${esc(sys.system_name)}</span>` : "";
+                const nameLabel = sys ? ` · ${esc(sys.system_name)}` : "";
                 return `
                 <div class="popover-section" style="margin-bottom: 20px; border-bottom: 1px solid #CFC3A3; padding-bottom: 15px;">
-                    <h3 style="color: #C44B22; font-size: 1.1em;">${esc(p.system_id)} (${p.year})${nameLabel}</h3>
+                    <h3 style="font-size: 0.95em; font-weight: 700; color: inherit; text-transform: none; font-family: inherit; letter-spacing: 0;">${esc(p.system_id)} (${p.year})${nameLabel}</h3>
                     <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: #3A2518; font-weight: 600; margin-bottom: 8px;">
                         ${esc(p.contaminant)} &rarr; ${esc(p.action)}
                     </div>
