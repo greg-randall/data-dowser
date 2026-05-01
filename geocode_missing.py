@@ -346,6 +346,14 @@ def main():
 
     cache = load_cache()
     out = {}
+    if OUT_PATH.exists():
+        with OUT_PATH.open() as f:
+            out = json.load(f)
+        print(f"Loaded {len(out)} existing geocoded entries")
+
+    def save_out():
+        with OUT_PATH.open("w") as f:
+            json.dump(out, f, indent=2)
     buckets = {"census": 0, "census_out_of_county": 0,
                "nominatim_street": 0, "nominatim_city": 0,
                "geoapify_street": 0,
@@ -606,8 +614,10 @@ def main():
                 print(f"[{i}/{len(targets)}] {sid}  queued for centroid ({county})")
 
         save_cache(cache)
+        save_out()
 
     save_cache(cache)
+    save_out()
 
     # Tier 3: phyllotactic spiral around derived county centroid
     by_county = {}
@@ -635,15 +645,7 @@ def main():
                 "spiral_index": i,
             }
 
-    # When --only is used, merge with existing output instead of overwriting
-    if args.only and OUT_PATH.exists():
-        with OUT_PATH.open() as f:
-            existing = json.load(f)
-        existing.update(out)
-        out = existing
-
-    with OUT_PATH.open("w") as f:
-        json.dump(out, f, indent=2)
+    save_out()
 
     total = len(targets)
     centroid_placed = sum(1 for v in out.values() if v["source"] == "centroid_spiral")
