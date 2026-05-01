@@ -12,14 +12,16 @@
     Surrounding years show ~20 ppb, indicating a massive data-entry typo. 
     We capped this at 22 ppb to preserve the violation signal while removing the impossible spike.
 
+
+# Below are probable unit errors/misplaced decimals, for example, they list "705" but probably meant 0.705.
+
 - system_id: "TX1820001"
   year: 2020
   contaminant: "Chlorite"
   action: 0.705
   note: >
-    The source report lists 705 ppm, but also marks 'Violation: N'. 
-    Since the limit is 1.0 ppm, 705 is physically impossible for drinking water. 
-    This is a common unit error where 705 ppb (0.705 ppm) was entered as ppm.
+    Unit Error: Source lists 705 ppm but marks 'Violation: False'. 
+    The actual value is almost certainly 705 ppb (0.705 ppm).
 
 - system_id: "TX1820069"
   year: 2021
