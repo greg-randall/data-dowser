@@ -21,54 +21,25 @@
 <body>
     <!-- Welcome Modal (hidden until data loads) -->
     <div class="welcome-overlay hidden" id="welcome-modal">
-        <div class="welcome-modal">
-            <div class="welcome-header">
-                <h2>Texas Water Quality Dashboard</h2>
-                <p>Public data, finally usable</p>
-            </div>
-            <div class="welcome-body">
-                <p>
-                    Every year, Texas’s <b>almost 15,000 water systems</b> are required to report their quality data. The state publishes these as over <b>225,000 individual Word documents</b> spanning <b>15 years</b>, buried behind a search form that only shows one system at a time.
-                </p>
-                <p>
-                    We’ve extracted that raw data and put it all in one place. In these reports, you will find <b>staggering numbers</b>—from industrial runoff to radioactive isotopes—recorded at levels tens or even hundreds of times beyond federal safety limits. 
-                </p>
-                <div class="welcome-stats">
-                    <div class="welcome-stat">
-                        <div class="welcome-stat-value" id="stat-systems">--</div>
-                        <div class="welcome-stat-label">water systems</div>
-                    </div>
-                    <div class="welcome-stat">
-                        <div class="welcome-stat-value" id="stat-violations">--</div>
-                        <div class="welcome-stat-label">with violations</div>
-                    </div>
-                    <div class="welcome-stat">
-                        <div class="welcome-stat-value" id="stat-population">--</div>
-                        <div class="welcome-stat-label">people affected</div>
-                    </div>
-                </div>
+        ...
+    </div>
 
-                <div class="welcome-legend">
-                    <div class="welcome-legend-item">
-                        <div class="welcome-legend-dot" style="background: #6bcb77;"></div>
-                        <span>No violations</span>
-                    </div>
-                    <div class="welcome-legend-item">
-                        <div class="welcome-legend-dot" style="background: #ffd93d;"></div>
-                        <span>Past violations</span>
-                    </div>
-                    <div class="welcome-legend-item">
-                        <div class="welcome-legend-dot" style="background: #ff6b6b;"></div>
-                        <span>Recent violations</span>
-                    </div>
-                </div>
+    <!-- Data Patches Modal -->
+    <div class="welcome-overlay hidden" id="all-patches-modal">
+        <div class="welcome-modal" style="max-width: 600px;">
+            <div class="welcome-header" style="background: #3A2518;">
+                <button class="popover-close" id="all-patches-close" style="color: white; top: 10px; right: 10px;">&times;</button>
+                <h2>Data Corrections</h2>
+                <p>Auditing raw state records for errors</p>
             </div>
-            <div class="welcome-footer">
-                <label>
-                    <input type="checkbox" id="welcome-dont-show">
-                    Don't show this again
-                </label>
-                <button class="welcome-btn" id="welcome-close">Got it</button>
+            <div class="welcome-body" id="all-patches-body" style="max-height: 60vh; overflow-y: auto; padding: 24px;">
+                <p style="color: #6B5A3A; font-style: italic; font-size: 0.85em; margin-bottom: 20px;">
+                    We preserve the "Violation" signal but remove impossible spikes (like unit errors) that would skew statewide comparisons.
+                </p>
+                <div id="patches-list"></div>
+            </div>
+            <div class="welcome-footer" style="justify-content: flex-end;">
+                <button class="welcome-btn" onclick="document.getElementById('all-patches-modal').classList.add('hidden')">Close</button>
             </div>
         </div>
     </div>
@@ -78,6 +49,7 @@
             <div class="sidebar-header">
                 <h1>Texas Water Quality</h1>
                 <div class="showing-count">Showing <span id="stat-showing">--</span></div>
+                <button class="explain-trigger" id="all-patches-trigger" style="margin-left: 0; margin-top: 8px;">What data we fixed</button>
             </div>
 
             <div class="filter-section">
@@ -1000,6 +972,32 @@
         document.getElementById('header-specific').onclick = function() {
             this.classList.toggle('expanded');
             document.getElementById('content-specific').classList.toggle('expanded');
+        };
+
+        // Data Patches Logic
+        const patchesTrigger = document.getElementById('all-patches-trigger');
+        const patchesModal = document.getElementById('all-patches-modal');
+        const patchesList = document.getElementById('patches-list');
+
+        patchesTrigger.onclick = async () => {
+            if (patchesList.innerHTML === '') {
+                try {
+                    const resp = await fetch('data_patches.json');
+                    const data = await resp.json();
+                    patchesList.innerHTML = data.map(p => `
+                        <div class="popover-section" style="margin-bottom: 20px; border-bottom: 1px solid #3A2518; padding-bottom: 15px;">
+                            <h3 style="color: #C44B22; font-size: 1.1em;">${esc(p.system_id)} (${p.year})</h3>
+                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: #C9901A; margin-bottom: 8px;">
+                                ${esc(p.contaminant)} &rarr; ${esc(p.action)}
+                            </div>
+                            <p style="font-size: 0.9em; line-height: 1.4; color: #1A1208;">${esc(p.note)}</p>
+                        </div>
+                    `).join('');
+                } catch (err) {
+                    patchesList.innerHTML = '<p style="color: #ff6b6b;">Failed to load corrections list.</p>';
+                }
+            }
+            patchesModal.classList.remove('hidden');
         };
 
         // Welcome modal logic

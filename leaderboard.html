@@ -73,16 +73,24 @@
 
     <!-- Patch Note Detail Modal -->
     <div class="welcome-modal hidden" id="patchModal" style="max-width: 400px;">
+        ...
+    </div>
+
+    <!-- All Corrections Modal -->
+    <div class="welcome-modal hidden" id="allPatchesModal" style="max-width: 600px;">
         <div class="welcome-header" style="background: #3A2518;">
-            <button class="popover-close" id="patchClose" style="color: white; top: 10px; right: 10px;">&times;</button>
-            <h2 style="font-size: 24px;">Data Correction</h2>
-            <p id="patch-title">System Correction</p>
+            <button class="popover-close" id="allPatchesClose" style="color: white; top: 10px; right: 10px;">&times;</button>
+            <h2 style="font-size: 24px;">Data Corrections</h2>
+            <p>Auditing raw state records for errors</p>
         </div>
-        <div class="welcome-body" style="padding: 24px;">
-            <p id="patch-note-text" style="font-size: 0.9em; line-height: 1.5; color: #1A1208;"></p>
-            <div style="margin-top: 15px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75em; color: #6B5A3A; border-top: 1px solid #CFC3A3; padding-top: 10px;">
-                We preserve the "Violation" signal but remove impossible spikes that would skew statewide rankings.
-            </div>
+        <div class="welcome-body" id="allPatchesBody" style="padding: 24px; max-height: 60vh; overflow-y: auto;">
+            <p style="color: #6B5A3A; font-style: italic; font-size: 0.85em; margin-bottom: 20px;">
+                We preserve the "Violation" signal but remove impossible spikes (like unit errors) that would skew statewide comparisons.
+            </p>
+            <div id="allPatchesList"></div>
+        </div>
+        <div class="welcome-footer" style="justify-content: flex-end;">
+            <button class="welcome-btn" onclick="document.getElementById('allPatchesModal').classList.add('hidden'); if(document.getElementById('aboutModal').classList.contains('hidden') && document.getElementById('patchModal').classList.contains('hidden')) document.getElementById('popoverOverlay').classList.remove('active');">Close</button>
         </div>
     </div>
 </div>
@@ -92,6 +100,7 @@
     <div class="sub">
         Ranked worst → best by total violation severity.
         <button class="explain-trigger" id="explainBtn">How is this ranked?</button>
+        <button class="explain-trigger" id="allPatchesBtn">What data we fixed</button>
         <div style="margin-top: 8px;">See the <a href="index.html">map dashboard</a>.</div>
     </div>
 </header>
@@ -166,11 +175,14 @@ function debounce(func, wait = 250) {
 
 // Popover Logic (ONE declaration of each variable)
 const explainBtn = document.getElementById("explainBtn");
+const allPatchesBtn = document.getElementById("allPatchesBtn");
 const popoverOverlay = document.getElementById("popoverOverlay");
 const popoverClose = document.getElementById("popoverClose");
 const popoverGotIt = document.getElementById("popoverGotIt");
 const popoverDontShow = document.getElementById("popoverDontShow");
 const patchClose = document.getElementById("patchClose");
+const allPatchesClose = document.getElementById("allPatchesClose");
+const allPatchesList = document.getElementById("allPatchesList");
 
 function closePopover() {
     if (popoverDontShow.checked) {
@@ -181,16 +193,44 @@ function closePopover() {
     setTimeout(() => {
         document.getElementById("aboutModal").classList.remove("hidden");
         document.getElementById("patchModal").classList.add("hidden");
+        document.getElementById("allPatchesModal").classList.add("hidden");
     }, 200);
 }
 
 explainBtn.onclick = () => {
     document.getElementById("aboutModal").classList.remove("hidden");
     document.getElementById("patchModal").classList.add("hidden");
+    document.getElementById("allPatchesModal").classList.add("hidden");
     popoverOverlay.classList.add("active");
 };
+
+allPatchesBtn.onclick = async () => {
+    if (allPatchesList.innerHTML === "") {
+        try {
+            const resp = await fetch("data_patches.json");
+            const data = await resp.json();
+            allPatchesList.innerHTML = data.map(p => `
+                <div class="popover-section" style="margin-bottom: 20px; border-bottom: 1px solid #CFC3A3; padding-bottom: 15px;">
+                    <h3 style="color: #C44B22; font-size: 1.1em;">${esc(p.system_id)} (${p.year})</h3>
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: #3A2518; font-weight: 600; margin-bottom: 8px;">
+                        ${esc(p.contaminant)} &rarr; ${esc(p.action)}
+                    </div>
+                    <p style="font-size: 0.9em; line-height: 1.4; color: #1A1208;">${esc(p.note)}</p>
+                </div>
+            `).join("");
+        } catch (err) {
+            allPatchesList.innerHTML = '<p style="color: #ff6b6b;">Failed to load corrections list.</p>';
+        }
+    }
+    document.getElementById("aboutModal").classList.add("hidden");
+    document.getElementById("patchModal").classList.add("hidden");
+    document.getElementById("allPatchesModal").classList.remove("hidden");
+    popoverOverlay.classList.add("active");
+};
+
 popoverClose.onclick = closePopover;
 patchClose.onclick = closePopover;
+allPatchesClose.onclick = closePopover;
 popoverGotIt.onclick = closePopover;
 popoverOverlay.onclick = (e) => { if (e.target === popoverOverlay) closePopover(); };
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopover(); });

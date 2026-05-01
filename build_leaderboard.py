@@ -321,6 +321,16 @@ def main():
     print(f"Systems: {len(ranked):,} total, "
           f"{systems_with_violations:,} with >=1 violation, "
           f"{systems_with_missing_mcl:,} with missing-MCL violations")
+    # Export data patches to JSON for the front-end transparency modal
+    patches_yaml = Path(__file__).parent / "data_patches.yaml"
+    if patches_yaml.exists():
+        with open(patches_yaml, 'r', encoding='utf-8') as f:
+            patches_data = yaml.safe_load(f)
+            if patches_data:
+                with open("data_patches.json", "w", encoding="utf-8") as out:
+                    json.dump(patches_data, out, indent=2)
+                print("Wrote data_patches.json")
+
     print(f"Wrote {out_path}")
     if ranked and ranked[0]["violation_count"] > 0:
         top = ranked[0]
