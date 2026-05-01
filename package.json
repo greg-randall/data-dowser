@@ -1,0 +1,9 @@
+{
+  "devDependencies": {
+    "eslint": "^10.2.1",
+    "eslint-plugin-html": "^8.1.4"
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.1"
+  }
+}

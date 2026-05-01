@@ -10,6 +10,13 @@ test_docs/
 *.txt
 *.log
 *.json
+!package.json
+!package-lock.json
+!leaderboard.json
+!dashboard_data_map.json
+!dashboard_data_details.json
+!contaminant_categories.yaml
+!contaminant_limits.yaml
 *.7z
 *.zip
 !texas_water_quality.csv.zip
