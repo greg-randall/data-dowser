@@ -128,7 +128,7 @@ def process_system_dir(dir_path):
                     clean_name = re.sub(r'\s+', ' ', name).strip()
                     
                     level = c.get("highest_level")
-                    level, dropped = apply_patch(system_id, year, clean_name, level)
+                    level, dropped, _ = apply_patch(system_id, year, clean_name, level)
                     if dropped: continue
 
                     # Use authoritative MCL if available, otherwise trust the report
