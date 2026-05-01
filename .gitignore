@@ -21,3 +21,6 @@ test_docs/
 !texas_water_quality.csv
 *bak/
 *debug/
+node_modules/
+on-website-*
+js_lint_report.md

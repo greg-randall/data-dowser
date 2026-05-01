@@ -33,10 +33,6 @@
                 <p>
                     We’ve extracted that raw data and put it all in one place. In these reports, you will find <b>staggering numbers</b>—from industrial runoff to radioactive isotopes—recorded at levels tens or even hundreds of times beyond federal safety limits. 
                 </p>
-                <p>
-                    This tool does not interpret the "why"; it simply makes the state’s own records searchable and visual for the first time.
-                </p>
-
                 <div class="welcome-stats">
                     <div class="welcome-stat">
                         <div class="welcome-stat-value" id="stat-systems">--</div>
@@ -932,12 +928,16 @@
 
         // Search logic
         const searchInput = document.getElementById('search-input'), searchResults = document.getElementById('search-results');
-        searchInput.oninput = (e) => {
+        searchInput.oninput = debounce((e) => {
             const query = e.target.value.trim().toLowerCase();
             if (query.length < 2) { searchResults.innerHTML = ''; searchResults.classList.add('hidden'); renderMap(); return; }
             const matches = mapData.systems.filter(s => (s.name||'').toLowerCase().includes(query) || s.id.toLowerCase().includes(query) || (s.county||'').toLowerCase().includes(query)).slice(0, 50);
             if (matches.length > 0) {
-                searchResults.innerHTML = matches.map(s => `<div class="search-result-item" data-id="${s.id}"><span class="name">${decodeHtml(s.name || 'Unknown')}</span><span class="meta">${s.id} · ${s.county || 'Unknown'}</span></div>`).join('');
+                searchResults.innerHTML = matches.map(s => `
+                    <div class="search-result-item" data-id="${esc(s.id)}">
+                        <span class="name">${esc(decodeHtml(s.name || 'Unknown'))}</span>
+                        <span class="meta">${esc(s.id)} · ${esc(s.county || 'Unknown')}</span>
+                    </div>`).join('');
                 searchResults.classList.remove('hidden');
                 searchResults.querySelectorAll('.search-result-item').forEach(item => {
                     item.onclick = () => {
@@ -947,7 +947,7 @@
                 });
             } else { searchResults.innerHTML = '<div class="search-result-item">No matches found</div>'; searchResults.classList.remove('hidden'); }
             renderMap();
-        };
+        }, 250);
         document.onclick = (e) => { if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) searchResults.classList.add('hidden'); };
 
         // Contaminant search logic

@@ -20,9 +20,7 @@
             <p style="margin-bottom: 12px;">
                 This leaderboard indexes the state’s <b>almost 15,000 water systems</b> by their own reported violation records across <b>15 years</b> and <b>225,000 source documents</b>.
             </p>
-            <p style="margin-bottom: 12px;">
-                In these raw reports, you will find <b>extreme outliers</b>—values appearing at 100x or even 1,000x the legal safety limit. We are not analyzing the health or environmental implications; we are simply sorting the systems by the weight of their own reported data. 
-            </p>
+
             <p class="popover-instruction" style="color: #6B5A3A !important; margin-bottom: 12px;">
                 Click any system name to open its full violation history on the map.
             </p>
@@ -142,6 +140,30 @@ const hideZero = document.getElementById("hideZero");
 const hideZeroLabel = document.getElementById("hideZeroLabel");
 const outlierWarn = document.getElementById("outlierWarn");
 
+/**
+ * Escape HTML to prevent XSS.
+ */
+function esc(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+/**
+ * Debounce helper to prevent excessive function calls.
+ */
+function debounce(func, wait = 250) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
 // Popover Logic (ONE declaration of each variable)
 const explainBtn = document.getElementById("explainBtn");
 const popoverOverlay = document.getElementById("popoverOverlay");
@@ -248,12 +270,12 @@ function render() {
             ? fmt(s.composite_score * 100, 1) 
             : `<span class="no-impact" title="Unknown population — ranked by Severity only">${fmt(0.7 * s.severity_norm * 100, 1)}*</span>`;
 
-        const worstLabel = w ? `<b>${fmt(w.severity, 1)}x</b> ${w.contaminant}` : "—";
-        const worstDetail = w ? `<div class="worst">${w.year ?? ""} · ${fmt(w.level)} ${w.units} / MCL ${fmt(w.mcl)}</div>` : "";
+        const worstLabel = w ? `<b>${fmt(w.severity, 1)}x</b> ${esc(w.contaminant)}` : "—";
+        const worstDetail = w ? `<div class="worst">${esc(w.year)} · ${fmt(w.level)} ${esc(w.units)} / MCL ${fmt(w.mcl)}</div>` : "";
 
         let patchIcon = "";
         if (s.patch_notes && s.patch_notes.length > 0) {
-            patchIcon = `<span class="patch-trigger" style="color: #C44B22; cursor: help; margin-left: 4px; font-size: 1.1em;" title="Click to see data correction details">ⓘ</span>`;
+            patchIcon = `<span class="patch-trigger" data-sid="${esc(s.system_id)}" style="color: #C44B22; cursor: help; margin-left: 4px; font-size: 1.1em;" title="Click to see data correction details">ⓘ</span>`;
         }
 
         tr.innerHTML = `
@@ -265,8 +287,8 @@ function render() {
                 <div class="sid" style="font-size: 0.8em; color: #6B5A3A; margin-top: 2px;">${sidCell}</div>
                 ${explainer}
             </td>
-            <td>${s.city || ""}</td>
-            <td>${s.county || ""}</td>
+            <td>${esc(s.city)}</td>
+            <td>${esc(s.county)}</td>
             <td class="num">${fmtPop(s.population)}</td>
             <td class="num">${s.active_years_count || 0}</td>
             <td class="num ${sevClass}">${fmt(s.severity_sum)}</td>
@@ -279,10 +301,11 @@ function render() {
     tb.appendChild(frag);
     
     // Add click handlers for patch icons
-    document.querySelectorAll(".patch-trigger").forEach((el, index) => {
+    document.querySelectorAll(".patch-trigger").forEach((el) => {
         el.onclick = (e) => {
             e.stopPropagation();
-            const s = FILTERED[index];
+            const sid = el.dataset.sid;
+            const s = FILTERED.find(x => x.system_id === sid);
             if (!s || !s.patch_notes) return;
             
             document.getElementById("patch-title").textContent = s.system_name;
@@ -321,7 +344,8 @@ document.querySelectorAll("thead th").forEach(th => {
         render();
     });
 });
-search.addEventListener("input", applyFilter);
+
+search.addEventListener("input", debounce(applyFilter, 250));
 hideZero.addEventListener("change", applyFilter);
 
 fetch("leaderboard.json")
