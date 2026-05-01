@@ -21,7 +21,55 @@
 <body>
     <!-- Welcome Modal (hidden until data loads) -->
     <div class="welcome-overlay hidden" id="welcome-modal">
-        ...
+        <div class="welcome-modal">
+            <div class="welcome-header">
+                <h2>Texas Water Quality Dashboard</h2>
+                <p>Public data, finally usable</p>
+            </div>
+            <div class="welcome-body">
+                <p>
+                    Every year, Texas's <b>almost 15,000 water systems</b> are required to report their quality data. The state publishes these as over <b>225,000 individual Word documents</b> spanning <b>15 years</b>, buried behind a search form that only shows one system at a time.
+                </p>
+                <p>
+                    We've extracted that raw data and put it all in one place. In these reports, you will find <b>staggering numbers</b>&mdash;from industrial runoff to radioactive isotopes&mdash;recorded at levels tens or even hundreds of times beyond federal safety limits.
+                </p>
+                <div class="welcome-stats">
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-value" id="stat-systems">--</div>
+                        <div class="welcome-stat-label">water systems</div>
+                    </div>
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-value" id="stat-violations">--</div>
+                        <div class="welcome-stat-label">with violations</div>
+                    </div>
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-value" id="stat-population">--</div>
+                        <div class="welcome-stat-label">people affected</div>
+                    </div>
+                </div>
+                <div class="welcome-legend">
+                    <div class="welcome-legend-item">
+                        <div class="welcome-legend-dot" style="background: #6bcb77;"></div>
+                        <span>No violations</span>
+                    </div>
+                    <div class="welcome-legend-item">
+                        <div class="welcome-legend-dot" style="background: #ffd93d;"></div>
+                        <span>Past violations</span>
+                    </div>
+                    <div class="welcome-legend-item">
+                        <div class="welcome-legend-dot" style="background: #ff6b6b;"></div>
+                        <span>Recent violations</span>
+                    </div>
+                </div>
+            </div>
+            <div class="welcome-footer">
+                <label>
+                    <input type="checkbox" id="welcome-dont-show">
+                    Don't show this again
+                </label>
+                <button class="welcome-btn" id="welcome-close">Got it</button>
+            </div>
+        </div>
     </div>
 
     <!-- Data Patches Modal -->
@@ -50,6 +98,7 @@
                 <h1>Texas Water Quality</h1>
                 <div class="showing-count">Showing <span id="stat-showing">--</span></div>
                 <button class="explain-trigger" id="all-patches-trigger" style="margin-left: 0; margin-top: 8px;">What data we fixed</button>
+                <a href="leaderboard.html" class="explain-trigger" style="text-decoration: none; margin-left: 0; margin-top: 6px;">View Leaderboard</a>
             </div>
 
             <div class="filter-section">
@@ -141,9 +190,6 @@
                     </div>
                 </div>
 
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #3A2518;">
-                    <a href="leaderboard.html" class="picker-btn" style="text-decoration: none; display: inline-block; width: 100%; text-align: center;">View Leaderboard</a>
-                </div>
             </div>
         </aside>
 
@@ -984,15 +1030,19 @@
                 try {
                     const resp = await fetch('data_patches.json');
                     const data = await resp.json();
-                    patchesList.innerHTML = data.map(p => `
-                        <div class="popover-section" style="margin-bottom: 20px; border-bottom: 1px solid #3A2518; padding-bottom: 15px;">
-                            <h3 style="color: #C44B22; font-size: 1.1em;">${esc(p.system_id)} (${p.year})</h3>
-                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: #C9901A; margin-bottom: 8px;">
+                    patchesList.innerHTML = data.map(p => {
+                        const sys = mapData ? mapData.systems.find(s => s.id === p.system_id) : null;
+                        const nameLabel = sys ? ` · ${esc(sys.name)}` : '';
+                        return `
+                        <div class="popover-section" style="margin-bottom: 20px; border-bottom: 1px solid #CFC3A3; padding-bottom: 15px;">
+                            <h3 style="font-size: 0.95em; font-weight: 700; color: inherit; text-transform: none; font-family: inherit; letter-spacing: 0;">${esc(p.system_id)} (${p.year})${nameLabel}</h3>
+                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: #3A2518; font-weight: 600; margin-bottom: 8px;">
                                 ${esc(p.contaminant)} &rarr; ${esc(p.action)}
                             </div>
                             <p style="font-size: 0.9em; line-height: 1.4; color: #1A1208;">${esc(p.note)}</p>
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
                 } catch (err) {
                     patchesList.innerHTML = '<p style="color: #ff6b6b;">Failed to load corrections list.</p>';
                 }
