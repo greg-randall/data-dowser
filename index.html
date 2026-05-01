@@ -701,6 +701,30 @@
             return textarea.value;
         }
 
+        /**
+         * Escape HTML to prevent XSS.
+         */
+        function esc(str) {
+            if (!str) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        /**
+         * Debounce helper to prevent excessive function calls.
+         */
+        function debounce(func, wait = 250) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
         function clearSelectedMarker() {
             if (selectedMarker) selectedMarker.setStyle({ weight: 1, color: '#fff' });
             if (selectedRing) { markersLayer.removeLayer(selectedRing); selectedRing = null; }
