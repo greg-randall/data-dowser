@@ -7,7 +7,8 @@
   contaminant: "Arsenic"
   action: 22.0
   note: >
-    The original report listed 45,262 ppb—a level that would be immediately fatal. 
+    The original report listed 45,262 ppb—an extreme outlier that is thousands of times 
+    beyond the legal limit and far exceeds levels associated with acute toxicity. 
     Surrounding years show ~20 ppb, indicating a massive data-entry typo. 
     We capped this at 22 ppb to preserve the violation signal while removing the impossible spike.
 
