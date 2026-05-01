@@ -605,9 +605,7 @@ def main():
             if args.verbose:
                 print(f"[{i}/{len(targets)}] {sid}  queued for centroid ({county})")
 
-        # Periodic cache flush so long runs don't lose progress
-        if i % 25 == 0:
-            save_cache(cache)
+        save_cache(cache)
 
     save_cache(cache)
 
