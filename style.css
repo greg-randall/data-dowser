@@ -626,6 +626,7 @@ body {
     display: none;
 }
 
+.welcome-modal.hidden { display: none; }
 .welcome-modal {
     background: #F2EEE3; /* Cream */
     border-radius: 8px;
