@@ -22,6 +22,7 @@ import urllib.request
 from pathlib import Path
 
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 LEADERBOARD = Path("leaderboard.json")
 PROFILE = Path("water_system_data_full_profile.json")
@@ -447,7 +448,7 @@ def main():
 
     pending_centroid = []
 
-    for i, s in enumerate(targets, 1):
+    for i, s in enumerate(tqdm(targets, desc="Geocoding"), 1):
         sid = s["system_id"]
         # Use profile metadata for county as primary, fallback to leaderboard
         p_meta = profile.get(sid, {}).get("meta", {})
