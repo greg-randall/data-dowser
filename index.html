@@ -397,8 +397,8 @@
         }
 
         function updateSelectedCount() {
-            document.getElementById('selected-count').textContent =
-                selectedSpecificContaminants.size + ' selected';
+            const el = document.getElementById('selected-count');
+            if (el) el.textContent = selectedSpecificContaminants.size + ' selected';
         }
 
         // Initialize map
@@ -436,8 +436,11 @@
                     const maxEl = document.getElementById('year-max');
                     minEl.min = minY; minEl.max = maxY; minEl.value = minY;
                     maxEl.min = minY; maxEl.max = maxY; maxEl.value = maxY;
-                    document.getElementById('year-min-val').textContent = minY;
-                    document.getElementById('year-max-val').textContent = maxY;
+                    
+                    const minValEl = document.getElementById('year-min-val');
+                    const maxValEl = document.getElementById('year-max-val');
+                    if (minValEl) minValEl.textContent = minY;
+                    if (maxValEl) maxValEl.textContent = maxY;
                     updateYearRangeFill();
                 }
 
@@ -655,7 +658,8 @@
                 currentMarkers.push({ marker, system });
             }
 
-            document.getElementById('stat-showing').textContent = showingCount.toLocaleString();
+            const showingEl = document.getElementById('stat-showing');
+            if (showingEl) showingEl.textContent = showingCount.toLocaleString();
             updateMarkerHighlight();
         }
 
@@ -870,31 +874,35 @@
             const minEl = document.getElementById('year-min'), maxEl = document.getElementById('year-max'), fill = document.getElementById('year-range-fill');
             const min = parseInt(minEl.min), max = parseInt(maxEl.max), minVal = parseInt(minEl.value), maxVal = parseInt(maxEl.value);
             const l = ((minVal - min) / (max - min)) * 100, w = ((maxVal - min) / (max - min)) * 100 - l;
-            fill.style.left = l + '%'; fill.style.width = w + '%';
+            if (fill) { fill.style.left = l + '%'; fill.style.width = w + '%'; }
         }
         document.getElementById('year-min').oninput = (e) => {
             const maxEl = document.getElementById('year-max'); if (parseInt(e.target.value) > parseInt(maxEl.value)) e.target.value = maxEl.value;
-            document.getElementById('year-min-val').textContent = e.target.value; updateYearRangeFill(); renderMap();
+            const valEl = document.getElementById('year-min-val'); if (valEl) valEl.textContent = e.target.value; 
+            updateYearRangeFill(); renderMap();
         };
         document.getElementById('year-max').oninput = (e) => {
             const minEl = document.getElementById('year-min'); if (parseInt(e.target.value) < parseInt(minEl.value)) e.target.value = minEl.value;
-            document.getElementById('year-max-val').textContent = e.target.value; updateYearRangeFill(); renderMap();
+            const valEl = document.getElementById('year-max-val'); if (valEl) valEl.textContent = e.target.value;
+            updateYearRangeFill(); renderMap();
         };
 
         function updatePopRangeFill() {
             const minEl = document.getElementById('population-min'), maxEl = document.getElementById('population-max'), fill = document.getElementById('pop-range-fill');
             const min = parseInt(minEl.min), max = parseInt(maxEl.max), minVal = parseInt(minEl.value), maxVal = parseInt(maxEl.value);
             const l = ((minVal - min) / (max - min)) * 100, w = ((maxVal - min) / (max - min)) * 100 - l;
-            fill.style.left = l + '%'; fill.style.width = w + '%';
+            if (fill) { fill.style.left = l + '%'; fill.style.width = w + '%'; }
         }
         document.getElementById('population-min').oninput = (e) => {
             const maxEl = document.getElementById('population-max'); if (parseInt(e.target.value) > parseInt(maxEl.value)) e.target.value = maxEl.value;
-            document.getElementById('pop-min-val').textContent = parseInt(e.target.value) >= 100000 ? '100k+' : (Math.round(e.target.value/1000)+'k');
+            const valEl = document.getElementById('pop-min-val');
+            if (valEl) valEl.textContent = parseInt(e.target.value) >= 100000 ? '100k+' : (Math.round(e.target.value/1000)+'k');
             updatePopRangeFill(); renderMap();
         };
         document.getElementById('population-max').oninput = (e) => {
             const minEl = document.getElementById('population-min'); if (parseInt(e.target.value) < parseInt(minEl.value)) e.target.value = minEl.value;
-            document.getElementById('pop-min-val').textContent = parseInt(e.target.value) >= 100000 ? '100k+' : (Math.round(e.target.value/1000)+'k');
+            const valEl = document.getElementById('pop-max-val');
+            if (valEl) valEl.textContent = parseInt(e.target.value) >= 100000 ? '100k+' : (Math.round(e.target.value/1000)+'k');
             updatePopRangeFill(); renderMap();
         };
 
@@ -947,14 +955,18 @@
                 const maxY = mapData.stats.year_range.max;
                 document.getElementById('year-min').value = minY;
                 document.getElementById('year-max').value = maxY;
-                document.getElementById('year-min-val').textContent = minY;
-                document.getElementById('year-max-val').textContent = maxY;
+                const minValEl = document.getElementById('year-min-val');
+                const maxValEl = document.getElementById('year-max-val');
+                if (minValEl) minValEl.textContent = minY;
+                if (maxValEl) maxValEl.textContent = maxY;
                 updateYearRangeFill();
             }
             document.getElementById('population-min').value = 0;
             document.getElementById('population-max').value = 100000;
-            document.getElementById('pop-min-val').textContent = '0';
-            document.getElementById('pop-max-val').textContent = '100k+';
+            const pMinVal = document.getElementById('pop-min-val');
+            const pMaxVal = document.getElementById('pop-max-val');
+            if (pMinVal) pMinVal.textContent = '0';
+            if (pMaxVal) pMaxVal.textContent = '100k+';
             updatePopRangeFill();
             
             renderMap();
@@ -969,8 +981,25 @@
         // Welcome modal logic
         function initWelcomeModal() {
             const m = document.getElementById('welcome-modal');
-            document.getElementById('welcome-close').onclick = () => { if (document.getElementById('welcome-dont-show').checked) localStorage.setItem('hideWelcome', 'true'); m.classList.add('hidden'); };
-            m.onclick = (e) => { if (e.target === m) { if (document.getElementById('welcome-dont-show').checked) localStorage.setItem('hideWelcome', 'true'); m.classList.add('hidden'); } };
+            const closeBtn = document.getElementById('welcome-close');
+            const dontShowCb = document.getElementById('welcome-dont-show');
+            
+            if (closeBtn) {
+                closeBtn.onclick = () => { 
+                    if (dontShowCb && dontShowCb.checked) localStorage.setItem('hideWelcome', 'true'); 
+                    m.classList.add('hidden'); 
+                };
+            }
+            
+            if (m) {
+                m.onclick = (e) => { 
+                    if (e.target === m) { 
+                        if (dontShowCb && dontShowCb.checked) localStorage.setItem('hideWelcome', 'true'); 
+                        m.classList.add('hidden'); 
+                    } 
+                };
+            }
+            
             document.onkeydown = (e) => { if (e.key === 'Escape') m.classList.add('hidden'); };
         }
         function showWelcomeModal() { 

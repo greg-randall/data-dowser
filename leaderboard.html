@@ -141,6 +141,8 @@ const search = document.getElementById("search");
 const hideZero = document.getElementById("hideZero");
 const hideZeroLabel = document.getElementById("hideZeroLabel");
 const outlierWarn = document.getElementById("outlierWarn");
+
+// Popover Logic (ONE declaration of each variable)
 const explainBtn = document.getElementById("explainBtn");
 const popoverOverlay = document.getElementById("popoverOverlay");
 const popoverClose = document.getElementById("popoverClose");
@@ -229,8 +231,6 @@ function render() {
         const tr = document.createElement("tr");
         const w = s.worst_violation;
         const sevClass = s.severity_sum >= 10 ? "severity-high" : "";
-        const worstCellSev = w ? `${fmt(w.severity, 1)}x` : "—";
-        const worstCellC = w ? `${w.contaminant}<div class="worst">${w.year ?? ""} · ${fmt(w.level)} ${w.units} / MCL ${fmt(w.mcl)}</div>` : "—";
         const sidEnc = encodeURIComponent(s.system_id);
         const yearParam = w && w.year ? `&year=${w.year}` : "";
         const nameEsc = (s.system_name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -328,7 +328,6 @@ fetch("leaderboard.json")
     .then(r => r.json())
     .then(data => {
         ALL = data.systems;
-        // default: sort by risk descending (worst first)
         sortKey = "composite_score";
         sortDir = -1;
         if (ALL.some(s => s.worst_violation && s.worst_violation.severity > 500)) {

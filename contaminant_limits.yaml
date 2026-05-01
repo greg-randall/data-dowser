@@ -89,3 +89,7 @@
 "Di (2-ethylhexyl) phthalate":
   mcl: 6.0
   units: "ppb"
+
+"Chlorite":
+  mcl: 1.0
+  units: "ppm"
