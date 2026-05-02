@@ -308,7 +308,7 @@ def google_name_geocode(name, expected_county=None):
         result_types = r.get("types", [])
         if "administrative_area_level_1" in result_types:
             continue
-        if "administrative_area_level_2" in result_types and not result_county:
+        if "administrative_area_level_2" in result_types:
             continue
         return {
             "status": "ok",
