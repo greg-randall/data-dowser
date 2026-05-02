@@ -2,7 +2,7 @@
 
 Three-tier strategy:
   1. Census street-address geocoder (no API key, free)
-  2. Nominatim city-level lookup for PO-box-only systems
+  2. Mapbox v6 geocoder (structured input where parseable; MAPBOX_TOKEN env var)
   3. County centroid + phyllotactic spiral for anything still unresolved
 
 Caches every API call in geocode_cache.json; outputs geocoded_coordinates.json.
@@ -33,7 +33,7 @@ OUT_PATH = Path("geocoded_coordinates.json")
 
 CENSUS_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-GEOAPIFY_URL = "https://api.geoapify.com/v1/geocode/search"
+MAPBOX_URL = "https://api.mapbox.com/search/geocode/v6/forward"
 USER_AGENT = "TexasWaterQualityAnalysis/1.0 (gregrr@gmail.com)"
 
 ROLE_PRIORITY = ["PWS", "OW", "EC", "ECS", "FC", "AC", "LCC"]
@@ -42,11 +42,17 @@ PO_BOX_STRIP_RE = re.compile(r"^\s*P\.?\s*O\.?\s*BOX\s+\w+\s+", re.IGNORECASE)
 
 CENSUS_SLEEP = 0.25
 NOMINATIM_SLEEP = 1.2
-GEOAPIFY_SLEEP = 0.2  # Geoapify is generally faster/higher limit than Nominatim
+MAPBOX_SLEEP = 0.05  # 1000 req/min rate limit — minimal sleep needed
 GOLDEN_ANGLE = math.pi * (3 - math.sqrt(5))
 SPIRAL_BASE_RADIUS = 0.015  # degrees; ~1.5 km at TX latitudes
 
-GEOAPIFY_KEY = os.getenv("GEOAPIFY_API_KEY")
+MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+
+# Matches "123 Main St, City, TX [zip]" for structured Mapbox geocoding input
+ADDR_COMPONENTS_RE = re.compile(
+    r'^(\d[\w\s.\-#/]*?),\s*([^,]+?),\s*(?:TX|TEXAS)\s*(\d{5})?\s*$',
+    re.IGNORECASE
+)
 
 JUNK_COUNTIES = {"UNKNOWN", "NO SITE VISIT DATA", ""}
 
@@ -114,40 +120,78 @@ def nominatim_search(query):
     }
 
 
-def geoapify_geocode(address):
-    if not GEOAPIFY_KEY:
-        return {"status": "error", "error": "GEOAPIFY_API_KEY not set"}
+def mapbox_geocode(address):
+    if not MAPBOX_TOKEN:
+        return {"status": "error", "error": "MAPBOX_TOKEN not set"}
+
+    # Use structured input if address parses as "street, city, TX [zip]"
+    m = ADDR_COMPONENTS_RE.match(address.strip())
+    if m:
+        params = {
+            "address_line1": m.group(1).strip(),
+            "place": m.group(2).strip(),
+            "region": "TX",
+            "country": "us",
+            "autocomplete": "false",
+            "types": "address,street",
+            "limit": 3,
+            "access_token": MAPBOX_TOKEN,
+        }
+        if m.group(3):
+            params["postcode"] = m.group(3)
+    else:
+        params = {
+            "q": address,
+            "country": "us",
+            "autocomplete": "false",
+            "types": "address,street",
+            "limit": 3,
+            "access_token": MAPBOX_TOKEN,
+        }
+
     try:
-        res = http_get_json(GEOAPIFY_URL, {
-            "text": address,
-            "format": "json",
-            "apiKey": GEOAPIFY_KEY,
-        })
+        res = http_get_json(MAPBOX_URL, params)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
         return {"status": "error", "error": str(e)}
 
-    results = res.get("results")
-    if not results:
-        return {"status": "not_found"}
-    
-    r = results[0]
-    # Geoapify returns state code or name. 
-    # Let's try to normalize it to "TX" or "TEXAS"
-    state = (r.get("state") or "").upper()
-    state_code = (r.get("state_code") or "").upper()
-    
-    county = (r.get("county") or "").replace(" County", "").strip().upper() or None
-    
-    return {
-        "status": "ok",
-        "lat": float(r["lat"]),
-        "lon": float(r["lon"]),
-        "matched_address": r.get("formatted", ""),
-        "county": county,
-        "state": state,
-        "state_code": state_code,
-        "result_type": r.get("result_type"),
-    }
+    for f in (res.get("features") or []):
+        props = f.get("properties", {})
+        mc = props.get("match_code", {})
+        confidence = mc.get("confidence", "")
+
+        # Reject low-confidence results outright; medium only if region matched
+        if confidence == "low":
+            continue
+        if confidence == "medium" and mc.get("region") != "matched":
+            continue
+
+        coords = props.get("coordinates", {})
+        lat = coords.get("latitude")
+        lon = coords.get("longitude")
+        if lat is None or lon is None:
+            continue
+
+        context = props.get("context", {})
+        region_code = context.get("region", {}).get("region_code", "")
+        if region_code and region_code != "TX":
+            continue
+
+        county_str = context.get("district", {}).get("name", "")
+        county = county_str.replace(" County", "").strip().upper() or None
+
+        return {
+            "status": "ok",
+            "lat": float(lat),
+            "lon": float(lon),
+            "matched_address": props.get("full_address", ""),
+            "county": county,
+            "state": "TEXAS",
+            "state_code": "TX",
+            "result_type": props.get("feature_type"),
+            "mapbox_confidence": confidence,
+        }
+
+    return {"status": "not_found"}
 
 
 # ---------- Coordinate extraction ----------------------------------------
@@ -199,7 +243,7 @@ def extract_survey_county(soup):
 def parse_addresses(soup):
     """Return dict {normalized_address: sorted list of role codes}."""
     out = {}
-    
+
     # 1. Primary: All Water System Contacts table
     header = soup.find(string=lambda t: t and "All Water System Contacts" in t)
     if header:
@@ -413,7 +457,7 @@ def main():
             json.dump(out, f, indent=2)
     buckets = {"census": 0, "census_out_of_county": 0,
                "nominatim_street": 0, "nominatim_city": 0,
-               "geoapify_street": 0,
+               "mapbox_street": 0,
                "centroid": 0, "no_address": 0, "no_centroid": 0}
 
     dirty = [False]  # mutable container so closures can set it
@@ -474,19 +518,19 @@ def main():
             return (r["lat"], r["lon"], r["matched_address"]), "ok"
         return None, last_reason
 
-    def try_geoapify(address, system_county, hint=None):
+    def try_mapbox(address, system_county, hint=None):
         """Return ((lat, lon, matched_address), reason) or (None, reason)."""
-        if not GEOAPIFY_KEY:
+        if not MAPBOX_TOKEN:
             return None, "no_api_key"
 
         variants = _query_variants(address, hint)
         last_reason = f"not_found (tried {len(variants)} variants)"
         for v in variants:
-            r = cached(cache, "geoapify", v, geoapify_geocode, GEOAPIFY_SLEEP, dirty, timings)
+            r = cached(cache, "mapbox", v, mapbox_geocode, MAPBOX_SLEEP, dirty, timings)
             if r["status"] != "ok":
                 continue
-            if "TX" not in [r.get("state"), r.get("state_code")] and \
-               "TEXAS" not in [r.get("state")]:
+            if "TX" not in [r.get("state_code"), r.get("state")] and \
+               "TEXAS" not in [r.get("state", "")]:
                 last_reason = f"not_texas (state={r.get('state')}, matched={r.get('matched_address')})"
                 continue
             matched_county = r.get("county")
@@ -575,7 +619,7 @@ def main():
         _t = time.perf_counter()
         resolved = None
 
-        # Tier 1: Street addresses (Census -> Geoapify -> Nominatim)
+        # Tier 1: Street addresses (Census -> Mapbox -> Nominatim)
         # Nominatim rate-limits to ~1 req/sec so we try it last.
         best_out_of_county = None
         for addr, roles in street_candidates:
@@ -603,15 +647,15 @@ def main():
             if s.get("system_name"): hint_parts.append(s["system_name"])
             if hint_parts: hint = ", ".join(hint_parts)
 
-            # Geoapify (fast, large quota)
-            geo, geo_reason = try_geoapify(addr, county, hint=hint)
+            # Mapbox (fast, 1000 req/min)
+            geo, geo_reason = try_mapbox(addr, county, hint=hint)
             if geo is not None:
                 lat, lon, matched = geo
-                resolved = {"lat": lat, "lon": lon, "source": "geoapify_street", "confidence": "ok", "matched_address": matched, "tried_address": addr, "roles": roles}
-                buckets["geoapify_street"] += 1
-                if args.verbose: print(f"    ✓ Geoapify Match: {matched}")
+                resolved = {"lat": lat, "lon": lon, "source": "mapbox_street", "confidence": "ok", "matched_address": matched, "tried_address": addr, "roles": roles}
+                buckets["mapbox_street"] += 1
+                if args.verbose: print(f"    ✓ Mapbox Match: {matched}")
                 break
-            if args.verbose: print(f"    - Geoapify rejected: {geo_reason}")
+            if args.verbose: print(f"    - Mapbox rejected: {geo_reason}")
 
             # Nominatim (rate-limited, last resort; disabled unless --enable-nominatim)
             if not args.enable_nominatim:
@@ -629,7 +673,7 @@ def main():
             if args.verbose: print(f"    ✗ All street geocoders failed")
 
         # Tier 2: PO Box cities (if no street match)
-        # Geoapify first (faster); Nominatim last (rate-limited).
+        # Mapbox first (faster); Nominatim last (rate-limited).
         if resolved is None:
             for addr, roles in po_box_candidates:
                 city_q = po_box_city(addr)
@@ -642,14 +686,14 @@ def main():
                 if s.get("system_name"): hint_parts.append(s["system_name"])
                 if hint_parts: hint = ", ".join(hint_parts)
 
-                geo, geo_reason = try_geoapify(city_q, county, hint=hint)
+                geo, geo_reason = try_mapbox(city_q, county, hint=hint)
                 if geo:
                     lat, lon, matched = geo
-                    resolved = {"lat": lat, "lon": lon, "source": "geoapify_city", "confidence": "ok", "matched_address": matched, "tried_address": city_q, "roles": roles}
-                    buckets["geoapify_street"] += 1
-                    if args.verbose: print(f"    ✓ Geoapify city match: {matched}")
+                    resolved = {"lat": lat, "lon": lon, "source": "mapbox_city", "confidence": "ok", "matched_address": matched, "tried_address": city_q, "roles": roles}
+                    buckets["mapbox_street"] += 1
+                    if args.verbose: print(f"    ✓ Mapbox city match: {matched}")
                     break
-                if args.verbose: print(f"    - Geoapify city rejected: {geo_reason}")
+                if args.verbose: print(f"    - Mapbox city rejected: {geo_reason}")
 
                 if not args.enable_nominatim:
                     if args.verbose: print(f"    - Nominatim skipped (use --enable-nominatim)")
@@ -719,7 +763,7 @@ def main():
                 return f"{p}={t:.2f}s({live}live/{hits}hit)"
             tqdm.write(
                 f"  [timing/25] html={t_html:.2f}s  save={t_save:.2f}s  "
-                + "  ".join(_tc(p) for p in ("census", "nominatim", "nominatim_county", "geoapify"))
+                + "  ".join(_tc(p) for p in ("census", "nominatim", "nominatim_county", "mapbox"))
             )
             t_html = t_geo = t_save = 0.0
             timings.clear()
@@ -733,7 +777,7 @@ def main():
     print(f"  Census (in county):    {buckets['census']}")
     print(f"  Census (out of county):{buckets['census_out_of_county']}")
     print(f"  Nominatim street:      {buckets['nominatim_street']}")
-    print(f"  Geoapify street:       {buckets['geoapify_street']}")
+    print(f"  Mapbox street:         {buckets['mapbox_street']}")
     print(f"  Nominatim city:        {buckets['nominatim_city']}")
     print(f"  Centroid spiral:       {buckets['centroid']}")
     print(f"  No address found:      {buckets['no_address']}")
