@@ -56,7 +56,10 @@ def http_get_json(url, params, timeout=30):
     full = url + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(full, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)
+        body = r.read()
+    if not body.strip():
+        raise json.JSONDecodeError("empty response", "", 0)
+    return json.loads(body)
 
 
 def census_geocode(address):
@@ -66,7 +69,7 @@ def census_geocode(address):
             "benchmark": "Public_AR_Current",
             "format": "json",
         })
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
         return {"status": "error", "error": str(e)}
     matches = res.get("result", {}).get("addressMatches") or []
     if not matches:
@@ -91,7 +94,7 @@ def nominatim_search(query):
             "addressdetails": 1,
             "countrycodes": "us",
         })
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
         return {"status": "error", "error": str(e)}
     if not res:
         return {"status": "not_found"}
@@ -119,9 +122,9 @@ def geoapify_geocode(address):
             "format": "json",
             "apiKey": GEOAPIFY_KEY,
         })
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
         return {"status": "error", "error": str(e)}
-    
+
     results = res.get("results")
     if not results:
         return {"status": "not_found"}
@@ -144,6 +147,24 @@ def geoapify_geocode(address):
         "state_code": state_code,
         "result_type": r.get("result_type"),
     }
+
+
+# ---------- Coordinate extraction ----------------------------------------
+
+def extract_coordinates(system_data):
+    """Return (lat, lon) from TCEQ source-water inventory, or (None, None)."""
+    for source in (system_data.get("sources") or []):
+        lat = source.get("latitude")
+        lon = source.get("longitude")
+        if lat and lon:
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+                if 25 < lat_f < 37 and -107 < lon_f < -93:
+                    return lat_f, lon_f
+            except (ValueError, TypeError):
+                pass
+    return None, None
 
 
 # ---------- Address parsing ----------------------------------------------
@@ -300,16 +321,25 @@ def load_cache():
 
 def save_cache(cache):
     with CACHE_PATH.open("w") as f:
-        json.dump(cache, f, indent=2)
+        json.dump(cache, f, separators=(',', ':'))
 
 
-def cached(cache, provider, query, fetch_fn, sleep_after):
+def cached(cache, provider, query, fetch_fn, sleep_after, dirty_flag, timings=None):
     key = f"{provider}:{query}"
     if key in cache:
+        if timings is not None:
+            timings[provider + "_hits"] = timings.get(provider + "_hits", 0) + 1
         return cache[key]
+    t0 = time.perf_counter()
     result = fetch_fn(query)
+    elapsed = time.perf_counter() - t0
     cache[key] = result
+    dirty_flag[0] = True
     time.sleep(sleep_after)
+    if timings is not None:
+        k = provider + "_live"
+        timings[k] = timings.get(k, 0) + 1
+        timings[provider + "_time"] = timings.get(provider + "_time", 0.0) + elapsed + sleep_after
     return result
 
 
@@ -323,20 +353,41 @@ def main():
                         help="Comma-separated system IDs to restrict processing (for debugging)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Log every system's tier decision")
+    parser.add_argument("--enable-nominatim", action="store_true",
+                        help="Allow Nominatim fallback (1.2s/call rate limit; off by default, use Geoapify instead)")
     args = parser.parse_args()
 
-    if not LEADERBOARD.exists():
-        sys.exit(f"ERROR: {LEADERBOARD} not found. Run build_leaderboard.py first.")
     if not PROFILE.exists():
         sys.exit(f"ERROR: {PROFILE} not found.")
 
-    lb = json.load(LEADERBOARD.open())
     profile = json.load(PROFILE.open())
     geography = derive_county_geography(profile)
     print(f"Derived geography for {len(geography)} counties")
 
-    targets = [s for s in lb["systems"]
-               if s["violation_count"] > 0 and s["latitude"] is None]
+    # Load already-geocoded output so we can skip completed systems
+    existing_out = {}
+    if OUT_PATH.exists():
+        with OUT_PATH.open() as f:
+            existing_out = json.load(f)
+
+    # Target every system that has no TCEQ source-water coordinates and
+    # hasn't already been geocoded into geocoded_coordinates.json.
+    targets = []
+    for sid, rec in profile.items():
+        if sid in existing_out:
+            continue
+        lat, lon = extract_coordinates(rec)
+        if lat is not None:
+            continue
+        meta = rec.get("meta", {}) or {}
+        folder = rec.get("folder_name", "")
+        name = folder.replace(f"{sid}_", "").replace("_", " ").strip()
+        targets.append({
+            "system_id": sid,
+            "system_name": name,
+            "county": (meta.get("county") or "").strip().upper(),
+        })
+
     if args.only:
         only_ids = {sid.strip() for sid in args.only.split(",") if sid.strip()}
         targets = [s for s in targets if s["system_id"] in only_ids]
@@ -345,11 +396,15 @@ def main():
     print(f"Targets: {len(targets)} systems")
 
     cache = load_cache()
-    out = {}
-    if OUT_PATH.exists():
-        with OUT_PATH.open() as f:
-            out = json.load(f)
-        print(f"Loaded {len(out)} existing geocoded entries")
+    out = existing_out
+
+    # Track spiral index per county so resumed runs continue the spiral correctly
+    centroid_indices = {}
+    for entry in existing_out.values():
+        if entry.get("source") == "centroid_spiral":
+            c = entry.get("county_used", "")
+            if c:
+                centroid_indices[c] = max(centroid_indices.get(c, 0), entry.get("spiral_index", 0) + 1)
 
     def save_out():
         with OUT_PATH.open("w") as f:
@@ -357,10 +412,13 @@ def main():
     buckets = {"census": 0, "census_out_of_county": 0,
                "nominatim_street": 0, "nominatim_city": 0,
                "geoapify_street": 0,
-               "pending_centroid": 0, "no_address": 0, "no_centroid": 0}
+               "centroid": 0, "no_address": 0, "no_centroid": 0}
+
+    dirty = [False]  # mutable container so closures can set it
+    timings = {}
 
     def try_census(address, county_geo):
-        result = cached(cache, "census", address, census_geocode, CENSUS_SLEEP)
+        result = cached(cache, "census", address, census_geocode, CENSUS_SLEEP, dirty, timings)
         if result["status"] != "ok":
             return None
         # Reject non-TX matches outright — contact addresses often sit in
@@ -399,7 +457,7 @@ def main():
         variants = _query_variants(query, hint)
         last_reason = f"not_found (tried {len(variants)} variants)"
         for v in variants:
-            r = cached(cache, "nominatim", v, nominatim_search, NOMINATIM_SLEEP)
+            r = cached(cache, "nominatim", v, nominatim_search, NOMINATIM_SLEEP, dirty, timings)
             if r["status"] != "ok":
                 continue
             if r.get("state") and r["state"] != "TEXAS":
@@ -422,7 +480,7 @@ def main():
         variants = _query_variants(address, hint)
         last_reason = f"not_found (tried {len(variants)} variants)"
         for v in variants:
-            r = cached(cache, "geoapify", v, geoapify_geocode, GEOAPIFY_SLEEP)
+            r = cached(cache, "geoapify", v, geoapify_geocode, GEOAPIFY_SLEEP, dirty, timings)
             if r["status"] != "ok":
                 continue
             if "TX" not in [r.get("state"), r.get("state_code")] and \
@@ -444,7 +502,7 @@ def main():
         if not county or county in JUNK_COUNTIES:
             return None
         query = f"{county} County, Texas, United States"
-        result = cached(cache, "nominatim_county", query, nominatim_search, NOMINATIM_SLEEP)
+        result = cached(cache, "nominatim_county", query, nominatim_search, NOMINATIM_SLEEP, dirty, timings)
         if result["status"] != "ok":
             return None
         return {
@@ -454,10 +512,11 @@ def main():
             "count": 0,
         }
 
-    pending_centroid = []
+    t_html = t_geo = t_save = 0.0
 
     for i, s in enumerate(tqdm(targets, desc="Geocoding"), 1):
         sid = s["system_id"]
+        soup = None
         # Use profile metadata for county as primary, fallback to leaderboard
         p_meta = profile.get(sid, {}).get("meta", {})
         county = (p_meta.get("county") or s.get("county") or "").strip().upper()
@@ -465,6 +524,7 @@ def main():
         if args.verbose:
             print(f"[{i}/{len(targets)}] {sid} ({s.get('system_name')}) County: {county}")
 
+        _t = time.perf_counter()
         html_path = CACHE_DIR / f"{sid}_detail.html"
         if not html_path.exists():
             if args.verbose:
@@ -484,8 +544,10 @@ def main():
                     if args.verbose:
                         print(f"  Recovered county from HTML survey table: {survey_county}")
                     county = survey_county
+        t_html += time.perf_counter() - _t
 
         # Look up derived geography; if absent, fall back to Nominatim
+        _t = time.perf_counter()
         county_geo = geography.get(county)
         if county_geo is None and county and county not in JUNK_COUNTIES:
             county_geo = get_county_centroid(county)
@@ -493,7 +555,7 @@ def main():
                 c = county_geo["centroid"]
                 print(f"  Got {county} centroid via Nominatim: {c[0]:.4f},{c[1]:.4f}")
 
-        addresses = parse_addresses(soup)
+        addresses = parse_addresses(soup) if soup is not None else {}
         ranked = rank_addresses(addresses)
 
         if not ranked:
@@ -507,6 +569,8 @@ def main():
         if args.verbose and ranked:
             print(f"  Parsed {len(street_candidates)} street addrs, {len(po_box_candidates)} PO boxes")
 
+        t_geo += time.perf_counter() - _t
+        _t = time.perf_counter()
         resolved = None
 
         # Tier 1: Street addresses (Census -> Geoapify -> Nominatim)
@@ -547,7 +611,10 @@ def main():
                 break
             if args.verbose: print(f"    - Geoapify rejected: {geo_reason}")
 
-            # Nominatim (rate-limited, last resort)
+            # Nominatim (rate-limited, last resort; disabled unless --enable-nominatim)
+            if not args.enable_nominatim:
+                if args.verbose: print(f"    - Nominatim skipped (use --enable-nominatim)")
+                continue
             nom, nom_reason = try_nominatim(addr, county, hint=hint)
             if nom is not None:
                 lat, lon, matched = nom
@@ -582,6 +649,9 @@ def main():
                     break
                 if args.verbose: print(f"    - Geoapify city rejected: {geo_reason}")
 
+                if not args.enable_nominatim:
+                    if args.verbose: print(f"    - Nominatim skipped (use --enable-nominatim)")
+                    continue
                 res, reason = try_nominatim(city_q, county, hint=hint)
                 if res:
                     lat, lon, matched = res
@@ -602,64 +672,71 @@ def main():
                 print(f"[{i}/{len(targets)}] {sid}  {resolved['source']}/{resolved['confidence']}  "
                       f"{resolved['lat']:.4f},{resolved['lon']:.4f}  {resolved['matched_address'][:60]}")
         else:
-            # Queue for centroid spiral
+            # Tier 3: place on county centroid spiral immediately
             if county_geo is None:
                 buckets["no_centroid"] += 1
                 if args.verbose:
                     print(f"[{i}/{len(targets)}] {sid}  no county geo ({county})")
                 continue
-            pending_centroid.append((sid, county, county_geo))
-            buckets["pending_centroid"] += 1
-            if args.verbose:
-                print(f"[{i}/{len(targets)}] {sid}  queued for centroid ({county})")
-
-        save_cache(cache)
-        save_out()
-
-    save_cache(cache)
-    save_out()
-
-    # Tier 3: phyllotactic spiral around derived county centroid
-    by_county = {}
-    for sid, county, geo in pending_centroid:
-        by_county.setdefault(county, []).append((sid, geo))
-    for county, entries in by_county.items():
-        entries.sort(key=lambda e: e[0])  # stable by system_id
-        centroid = entries[0][1]["centroid"]
-        clat, clon = centroid
-        lon_scale = 1.0 / max(math.cos(math.radians(clat)), 0.1)
-        for i, (sid, geo) in enumerate(entries):
-            angle = i * GOLDEN_ANGLE
-            radius = SPIRAL_BASE_RADIUS * math.sqrt(i + 1)
-            d_lat = radius * math.sin(angle)
-            d_lon = radius * math.cos(angle) * lon_scale
+            idx = centroid_indices.get(county, 0)
+            centroid_indices[county] = idx + 1
+            clat, clon = county_geo["centroid"]
+            lon_scale = 1.0 / max(math.cos(math.radians(clat)), 0.1)
+            angle = idx * GOLDEN_ANGLE
+            radius = SPIRAL_BASE_RADIUS * math.sqrt(idx + 1)
             out[sid] = {
-                "lat": clat + d_lat,
-                "lon": clon + d_lon,
+                "lat": clat + radius * math.sin(angle),
+                "lon": clon + radius * math.cos(angle) * lon_scale,
                 "source": "centroid_spiral",
                 "confidence": "centroid",
                 "matched_address": None,
                 "tried_address": None,
                 "roles": [],
                 "county_used": county,
-                "spiral_index": i,
+                "spiral_index": idx,
             }
+            buckets["centroid"] += 1
+            if args.verbose:
+                print(f"[{i}/{len(targets)}] {sid}  centroid spiral idx={idx} ({county})")
 
+        t_geo += time.perf_counter() - _t
+
+        # Batch saves: flush every 25 systems to avoid hammering the WSL filesystem
+        if i % 25 == 0:
+            _t = time.perf_counter()
+            if dirty[0]:
+                save_cache(cache)
+                dirty[0] = False
+            save_out()
+            t_save += time.perf_counter() - _t
+
+            def _tc(p):
+                live = timings.get(p + "_live", 0)
+                hits = timings.get(p + "_hits", 0)
+                t = timings.get(p + "_time", 0.0)
+                return f"{p}={t:.2f}s({live}live/{hits}hit)"
+            tqdm.write(
+                f"  [timing/25] html={t_html:.2f}s  save={t_save:.2f}s  "
+                + "  ".join(_tc(p) for p in ("census", "nominatim", "nominatim_county", "geoapify"))
+            )
+            t_html = t_geo = t_save = 0.0
+            timings.clear()
+
+    if dirty[0]:
+        save_cache(cache)
     save_out()
 
     total = len(targets)
-    centroid_placed = sum(1 for v in out.values() if v["source"] == "centroid_spiral")
     print(f"\nWrote {OUT_PATH} with {len(out)} entries")
     print(f"  Census (in county):    {buckets['census']}")
     print(f"  Census (out of county):{buckets['census_out_of_county']}")
     print(f"  Nominatim street:      {buckets['nominatim_street']}")
     print(f"  Geoapify street:       {buckets['geoapify_street']}")
     print(f"  Nominatim city:        {buckets['nominatim_city']}")
-    print(f"  Centroid spiral:       {centroid_placed}")
+    print(f"  Centroid spiral:       {buckets['centroid']}")
     print(f"  No address found:      {buckets['no_address']}")
     print(f"  No county geo:         {buckets['no_centroid']}")
-    resolved = len(out)
-    print(f"\nResolved: {resolved}/{total} ({100*resolved/max(total,1):.1f}%)")
+    print(f"\nResolved: {len(out)}/{total} ({100*len(out)/max(total,1):.1f}%)")
 
 
 if __name__ == "__main__":
