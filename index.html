@@ -36,7 +36,7 @@
                 <div class="welcome-stats">
                     <div class="welcome-stat">
                         <div class="welcome-stat-value" id="stat-systems">--</div>
-                        <div class="welcome-stat-label">water systems</div>
+                        <div class="welcome-stat-label">systems mapped</div>
                     </div>
                     <div class="welcome-stat">
                         <div class="welcome-stat-value" id="stat-violations">--</div>
@@ -121,23 +121,23 @@
                 <h3>Issues & Categories</h3>
                 <div class="checkbox-group">
                     <label>
-                        <input type="checkbox" id="filter-oil_gas" checked>
+                        <input type="checkbox" id="filter-oil_gas">
                         Oil & Gas (BTEX)
                     </label>
                     <label>
-                        <input type="checkbox" id="filter-radioactive" checked>
+                        <input type="checkbox" id="filter-radioactive">
                         Radioactive (Radium, Uranium)
                     </label>
                     <label>
-                        <input type="checkbox" id="filter-agricultural" checked>
+                        <input type="checkbox" id="filter-agricultural">
                         Agricultural (Nitrate, Nitrite)
                     </label>
                     <label>
-                        <input type="checkbox" id="filter-heavy_metals" checked>
+                        <input type="checkbox" id="filter-heavy_metals">
                         Heavy Metals (Arsenic, Lead)
                     </label>
                     <label>
-                        <input type="checkbox" id="filter-disinfection_byproducts" checked>
+                        <input type="checkbox" id="filter-disinfection_byproducts">
                         Disinfection Byproducts
                     </label>
                 </div>
@@ -508,8 +508,9 @@
             const violEl = document.getElementById('stat-violations');
             const popEl = document.getElementById('stat-population');
             
-            if (sysEl) sysEl.textContent = mapData.stats.total_systems?.toLocaleString() || '--';
-            if (violEl) violEl.textContent = mapData.stats.systems_with_violations?.toLocaleString() || '--';
+            if (sysEl) sysEl.textContent = mapData.stats.systems_with_coordinates?.toLocaleString() || '--';
+            const mappedWithViolations = mapData.systems.filter(s => s.violationStatus > 0).length;
+            if (violEl) violEl.textContent = mappedWithViolations.toLocaleString();
             if (popEl) popEl.textContent = formatPopulation(mapData.stats.population_affected);
         }
 
@@ -988,7 +989,7 @@
 
         // Reset filters logic
         document.getElementById('reset-filters').onclick = () => {
-            document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => cb.checked = false);
             document.getElementById('search-input').value = '';
             document.getElementById('violations-only').checked = false;
             document.getElementById('match-mode').checked = false;
