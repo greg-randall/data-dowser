@@ -43,10 +43,13 @@ PO_BOX_STRIP_RE = re.compile(r"^\s*P\.?\s*O\.?\s*BOX\s+\w+\s+", re.IGNORECASE)
 CENSUS_SLEEP = 0.25
 NOMINATIM_SLEEP = 1.2
 MAPBOX_SLEEP = 0.05  # 1000 req/min rate limit — minimal sleep needed
+GMAPS_SLEEP = 0.05   # Google allows 50 req/s
 GOLDEN_ANGLE = math.pi * (3 - math.sqrt(5))
 SPIRAL_BASE_RADIUS = 0.015  # degrees; ~1.5 km at TX latitudes
 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+GMAPS_API_KEY = os.getenv("GMAPS_API_KEY")
+GMAPS_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
 # Matches "123 Main St, City, TX [zip]" for structured Mapbox geocoding input
 ADDR_COMPONENTS_RE = re.compile(
@@ -250,6 +253,72 @@ def mapbox_name_geocode(name, expected_county=None):
             "state_code": "TX",
             "result_type": props.get("feature_type"),
             "mapbox_confidence": confidence,
+        }
+
+    return {"status": "not_found"}
+
+
+def google_name_geocode(name, expected_county=None):
+    """Geocode by system name using Google Maps Geocoding API.
+
+    Appends 'County, TX' to the query — test data showed this helps Google
+    find roads and businesses in the right county vs. fuzzy phonetic matches.
+    Validates that the result county matches expected_county when provided.
+    """
+    if not GMAPS_API_KEY:
+        return {"status": "error", "error": "GMAPS_API_KEY not set"}
+    query = name
+    if expected_county and expected_county not in JUNK_COUNTIES:
+        query = f"{name}, {expected_county.title()} County, TX"
+    params = {
+        "address": query,
+        "components": "country:US|administrative_area:TX",
+        "key": GMAPS_API_KEY,
+    }
+    try:
+        res = http_get_json(GMAPS_URL, params)
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
+        return {"status": "error", "error": str(e)}
+
+    if res.get("status") not in ("OK", "ZERO_RESULTS"):
+        return {"status": "error", "error": res.get("status")}
+
+    for r in (res.get("results") or []):
+        comps = r.get("address_components", [])
+
+        def _comp(kind):
+            for c in comps:
+                if kind in c.get("types", []):
+                    return c.get("long_name", "")
+            return ""
+
+        state = _comp("administrative_area_level_1")
+        if state and state.upper() not in ("TEXAS", "TX"):
+            continue
+        county_raw = _comp("administrative_area_level_2")
+        result_county = county_raw.replace(" County", "").strip().upper() or None
+        if expected_county and expected_county not in JUNK_COUNTIES:
+            if result_county and result_county != expected_county:
+                continue
+        loc = r.get("geometry", {}).get("location", {})
+        lat, lon = loc.get("lat"), loc.get("lng")
+        if lat is None or lon is None:
+            continue
+        # Reject results that are just the state or county centroid (too coarse)
+        result_types = r.get("types", [])
+        if "administrative_area_level_1" in result_types:
+            continue
+        if "administrative_area_level_2" in result_types and not result_county:
+            continue
+        return {
+            "status": "ok",
+            "lat": float(lat),
+            "lon": float(lon),
+            "matched_address": r.get("formatted_address", ""),
+            "county": result_county,
+            "state": "TEXAS",
+            "state_code": "TX",
+            "result_type": result_types[0] if result_types else None,
         }
 
     return {"status": "not_found"}
@@ -479,7 +548,7 @@ def main():
             existing_out = json.load(f)
 
     if args.reprocess_centroids:
-        reprocess_sources = {"centroid_spiral", "mapbox_name"}
+        reprocess_sources = {"centroid_spiral", "mapbox_name", "google_name"}
         reprocess_sids = [sid for sid, v in existing_out.items()
                           if v.get("source") in reprocess_sources]
         for sid in reprocess_sids:
@@ -537,7 +606,7 @@ def main():
             json.dump(out, f, indent=2)
     buckets = {"census": 0, "census_out_of_county": 0,
                "nominatim_street": 0, "nominatim_city": 0,
-               "mapbox_street": 0, "mapbox_name": 0,
+               "mapbox_street": 0, "mapbox_name": 0, "google_name": 0,
                "centroid": 0, "no_address": 0, "no_centroid": 0}
 
     dirty = [False]  # mutable container so closures can set it
@@ -822,6 +891,28 @@ def main():
             elif args.verbose:
                 print(f"    - Mapbox name rejected: {r.get('status')}")
 
+        # Tier 2.6: Google Maps name geocoding — appends county to query for better targeting.
+        if resolved is None and s.get("system_name") and county not in JUNK_COUNTIES:
+            system_name = s["system_name"]
+            _expected_county = county
+
+            def _fetch_google(q):
+                return google_name_geocode(q, expected_county=_expected_county)
+
+            r = cached(cache, "google_name", system_name, _fetch_google, GMAPS_SLEEP, dirty, timings)
+            if r["status"] == "ok":
+                resolved = {
+                    "lat": r["lat"], "lon": r["lon"],
+                    "source": "google_name", "confidence": "name_match",
+                    "matched_address": r["matched_address"],
+                    "tried_address": system_name, "roles": [],
+                }
+                buckets["google_name"] += 1
+                if args.verbose:
+                    print(f"    ✓ Google name match: {r['matched_address']}")
+            elif args.verbose:
+                print(f"    - Google name rejected: {r.get('status')}")
+
         if resolved is not None:
             out[sid] = resolved
             if args.verbose:
@@ -873,7 +964,9 @@ def main():
                 return f"{p}={t:.2f}s({live}live/{hits}hit)"
             tqdm.write(
                 f"  [timing/25] html={t_html:.2f}s  save={t_save:.2f}s  "
-                + "  ".join(_tc(p) for p in ("census", "nominatim", "nominatim_county", "mapbox", "mapbox_name"))
+                + "  ".join(_tc(p) for p in (
+                    "census", "nominatim", "nominatim_county", "mapbox", "mapbox_name", "google_name"
+                ))
             )
             t_html = t_geo = t_save = 0.0
             timings.clear()
@@ -889,6 +982,7 @@ def main():
     print(f"  Nominatim street:      {buckets['nominatim_street']}")
     print(f"  Mapbox street:         {buckets['mapbox_street']}")
     print(f"  Mapbox name:           {buckets['mapbox_name']}")
+    print(f"  Google name:           {buckets['google_name']}")
     print(f"  Nominatim city:        {buckets['nominatim_city']}")
     print(f"  Centroid spiral:       {buckets['centroid']}")
     print(f"  No address found:      {buckets['no_address']}")
