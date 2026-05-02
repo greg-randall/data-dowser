@@ -194,6 +194,67 @@ def mapbox_geocode(address):
     return {"status": "not_found"}
 
 
+def mapbox_name_geocode(name, expected_county=None):
+    """Geocode by system name; accepts place-level results.
+
+    Queries just the system name (no county appended — county words in the
+    query match street names like 'Travis County Way'). Uses region=TX as a
+    parameter constraint instead. Enforces county match when expected_county
+    is provided.
+    """
+    if not MAPBOX_TOKEN:
+        return {"status": "error", "error": "MAPBOX_TOKEN not set"}
+    params = {
+        "q": name,
+        "country": "us",
+        "region": "TX",
+        "autocomplete": "false",
+        "types": "address,street,place",
+        "limit": 5,
+        "access_token": MAPBOX_TOKEN,
+    }
+    try:
+        res = http_get_json(MAPBOX_URL, params)
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
+        return {"status": "error", "error": str(e)}
+
+    for f in (res.get("features") or []):
+        props = f.get("properties", {})
+        mc = props.get("match_code", {})
+        confidence = mc.get("confidence", "")
+        if confidence == "low":
+            continue
+        if confidence == "medium" and mc.get("region") != "matched":
+            continue
+        coords = props.get("coordinates", {})
+        lat = coords.get("latitude")
+        lon = coords.get("longitude")
+        if lat is None or lon is None:
+            continue
+        context = props.get("context", {})
+        region_code = context.get("region", {}).get("region_code", "")
+        if region_code and region_code != "TX":
+            continue
+        county_str = context.get("district", {}).get("name", "")
+        result_county = county_str.replace(" County", "").strip().upper() or None
+        if expected_county and expected_county not in JUNK_COUNTIES:
+            if result_county and result_county != expected_county:
+                continue
+        return {
+            "status": "ok",
+            "lat": float(lat),
+            "lon": float(lon),
+            "matched_address": props.get("full_address", ""),
+            "county": result_county,
+            "state": "TEXAS",
+            "state_code": "TX",
+            "result_type": props.get("feature_type"),
+            "mapbox_confidence": confidence,
+        }
+
+    return {"status": "not_found"}
+
+
 # ---------- Coordinate extraction ----------------------------------------
 
 def extract_coordinates(system_data):
@@ -400,6 +461,8 @@ def main():
                         help="Log every system's tier decision")
     parser.add_argument("--enable-nominatim", action="store_true",
                         help="Allow Nominatim fallback (1.2s/call rate limit; off by default, use Geoapify instead)")
+    parser.add_argument("--reprocess-centroids", action="store_true",
+                        help="Clear existing centroid_spiral entries and re-geocode them through all tiers")
     args = parser.parse_args()
 
     if not PROFILE.exists():
@@ -414,6 +477,14 @@ def main():
     if OUT_PATH.exists():
         with OUT_PATH.open() as f:
             existing_out = json.load(f)
+
+    if args.reprocess_centroids:
+        reprocess_sources = {"centroid_spiral", "mapbox_name"}
+        reprocess_sids = [sid for sid, v in existing_out.items()
+                          if v.get("source") in reprocess_sources]
+        for sid in reprocess_sids:
+            del existing_out[sid]
+        print(f"Cleared {len(reprocess_sids)} centroid_spiral/mapbox_name entries for reprocessing")
 
     # Load TCEQ county lookup (from fetch_tceq_counties.py) as a county source
     # for systems whose profile county is "NO SITE VISIT DATA"
@@ -466,7 +537,7 @@ def main():
             json.dump(out, f, indent=2)
     buckets = {"census": 0, "census_out_of_county": 0,
                "nominatim_street": 0, "nominatim_city": 0,
-               "mapbox_street": 0,
+               "mapbox_street": 0, "mapbox_name": 0,
                "centroid": 0, "no_address": 0, "no_centroid": 0}
 
     dirty = [False]  # mutable container so closures can set it
@@ -727,6 +798,30 @@ def main():
             resolved = best_out_of_county
             buckets["census_out_of_county"] += 1
 
+        # Tier 2.5: Name-based Mapbox query — place-level, last resort before centroid.
+        # Query is just the system name (county appended to query matches street names).
+        # County enforcement happens inside the fetch function via closure.
+        if resolved is None and s.get("system_name") and county not in JUNK_COUNTIES:
+            system_name = s["system_name"]
+            _expected_county = county
+
+            def _fetch_name(q):
+                return mapbox_name_geocode(q, expected_county=_expected_county)
+
+            r = cached(cache, "mapbox_name", system_name, _fetch_name, MAPBOX_SLEEP, dirty, timings)
+            if r["status"] == "ok":
+                resolved = {
+                    "lat": r["lat"], "lon": r["lon"],
+                    "source": "mapbox_name", "confidence": "name_match",
+                    "matched_address": r["matched_address"],
+                    "tried_address": system_name, "roles": [],
+                }
+                buckets["mapbox_name"] += 1
+                if args.verbose:
+                    print(f"    ✓ Mapbox name match: {r['matched_address']}")
+            elif args.verbose:
+                print(f"    - Mapbox name rejected: {r.get('status')}")
+
         if resolved is not None:
             out[sid] = resolved
             if args.verbose:
@@ -778,7 +873,7 @@ def main():
                 return f"{p}={t:.2f}s({live}live/{hits}hit)"
             tqdm.write(
                 f"  [timing/25] html={t_html:.2f}s  save={t_save:.2f}s  "
-                + "  ".join(_tc(p) for p in ("census", "nominatim", "nominatim_county", "mapbox"))
+                + "  ".join(_tc(p) for p in ("census", "nominatim", "nominatim_county", "mapbox", "mapbox_name"))
             )
             t_html = t_geo = t_save = 0.0
             timings.clear()
@@ -793,6 +888,7 @@ def main():
     print(f"  Census (out of county):{buckets['census_out_of_county']}")
     print(f"  Nominatim street:      {buckets['nominatim_street']}")
     print(f"  Mapbox street:         {buckets['mapbox_street']}")
+    print(f"  Mapbox name:           {buckets['mapbox_name']}")
     print(f"  Nominatim city:        {buckets['nominatim_city']}")
     print(f"  Centroid spiral:       {buckets['centroid']}")
     print(f"  No address found:      {buckets['no_address']}")
