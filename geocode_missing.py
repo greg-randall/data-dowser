@@ -415,6 +415,15 @@ def main():
         with OUT_PATH.open() as f:
             existing_out = json.load(f)
 
+    # Load TCEQ county lookup (from fetch_tceq_counties.py) as a county source
+    # for systems whose profile county is "NO SITE VISIT DATA"
+    tceq_counties = {}
+    tceq_counties_path = Path("tceq_counties.json")
+    if tceq_counties_path.exists():
+        with tceq_counties_path.open() as f:
+            tceq_counties = json.load(f)
+        print(f"Loaded {len(tceq_counties)} TCEQ county records")
+
     # Target every system that has no TCEQ source-water coordinates and
     # hasn't already been geocoded into geocoded_coordinates.json.
     targets = []
@@ -591,6 +600,12 @@ def main():
                         print(f"  Recovered county from HTML survey table: {survey_county}")
                     county = survey_county
         t_html += time.perf_counter() - _t
+
+        # Last-resort county recovery: TCEQ SearchResults API data
+        if county in JUNK_COUNTIES and sid in tceq_counties:
+            county = tceq_counties[sid].strip().upper()
+            if args.verbose:
+                print(f"  Recovered county from TCEQ API: {county}")
 
         # Look up derived geography; if absent, fall back to Nominatim
         _t = time.perf_counter()
