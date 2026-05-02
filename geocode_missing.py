@@ -11,6 +11,7 @@ import argparse
 import json
 import math
 import os
+import random
 import re
 import statistics
 import sys
@@ -392,11 +393,12 @@ def main():
         only_ids = {sid.strip() for sid in args.only.split(",") if sid.strip()}
         targets = [s for s in targets if s["system_id"] in only_ids]
     if args.limit:
-        targets = targets[:args.limit]
+        targets = random.sample(targets, min(args.limit, len(targets)))
     print(f"Targets: {len(targets)} systems")
 
     cache = load_cache()
     out = existing_out
+    out_start_size = len(out)
 
     # Track spiral index per county so resumed runs continue the spiral correctly
     centroid_indices = {}
@@ -736,7 +738,9 @@ def main():
     print(f"  Centroid spiral:       {buckets['centroid']}")
     print(f"  No address found:      {buckets['no_address']}")
     print(f"  No county geo:         {buckets['no_centroid']}")
-    print(f"\nResolved: {len(out)}/{total} ({100*len(out)/max(total,1):.1f}%)")
+    newly_resolved = len(out) - out_start_size
+    print(f"\nResolved this run: {newly_resolved}/{total} ({100*newly_resolved/max(total,1):.1f}%)")
+    print(f"Total in output:   {len(out)}")
 
 
 if __name__ == "__main__":
