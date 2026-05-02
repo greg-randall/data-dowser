@@ -508,8 +508,9 @@ def cached(cache, provider, query, fetch_fn, sleep_after, dirty_flag, timings=No
     t0 = time.perf_counter()
     result = fetch_fn(query)
     elapsed = time.perf_counter() - t0
-    cache[key] = result
-    dirty_flag[0] = True
+    if result.get("status") != "error":
+        cache[key] = result
+        dirty_flag[0] = True
     time.sleep(sleep_after)
     if timings is not None:
         k = provider + "_live"
